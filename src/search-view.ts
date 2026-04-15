@@ -182,7 +182,7 @@ export class SearchView extends ItemView {
             );
             if (!queryVec || queryVec.length === 0 || query !== this.currentQuery) return;
 
-            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings);
+            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings, query);
             this.renderSearchResults();
             this.searchStatusEl.setText(t.searchResults(this.lastResults.length));
         } catch (e) {

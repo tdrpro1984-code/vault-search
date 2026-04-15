@@ -156,6 +156,30 @@ export function splitChunks(text: string, size: number, overlap: number): string
     return chunks;
 }
 
+export function computeTitleBoost(query: string, title: string): number {
+    const q = query.toLowerCase().trim();
+    const t = title.toLowerCase().trim();
+    if (!q || !t) return 0;
+
+    // Exact match
+    if (q === t) return 0.25;
+
+    // One contains the other (partial title match)
+    if (t.includes(q) || q.includes(t)) return 0.15;
+
+    // Word overlap — handles both CJK (single-word titles) and multi-word Latin titles
+    const qWords = q.split(/\s+/).filter(Boolean);
+    const tWords = t.split(/\s+/).filter(Boolean);
+    if (qWords.length > 0 && tWords.length > 0) {
+        const matched = qWords.filter(w =>
+            tWords.some(tw => tw.includes(w) || w.includes(tw))
+        ).length;
+        if (matched > 0) return 0.08 * (matched / qWords.length);
+    }
+
+    return 0;
+}
+
 export function searchNoteScore(queryVec: number[], entry: import("./types").NoteEntry): number {
     if (entry.chunks && entry.chunks.length > 0) {
         let maxScore = 0;
@@ -174,12 +198,15 @@ export function rankNotes(
     queryVec: number[],
     index: import("./types").VaultSearchIndex,
     settings: { searchScope: string; minScore: number; topResults: number },
+    queryText?: string,
 ): import("./types").SearchResult[] {
     const results: import("./types").SearchResult[] = [];
     for (const [path, entry] of Object.entries(index.notes)) {
         if (settings.searchScope === "hot" && entry.tier !== "hot") continue;
         if (settings.searchScope === "cold" && entry.tier !== "cold") continue;
-        const score = searchNoteScore(queryVec, entry);
+        const semanticScore = searchNoteScore(queryVec, entry);
+        const titleBoost = queryText ? computeTitleBoost(queryText, entry.title) : 0;
+        const score = Math.min(semanticScore + titleBoost, 1);
         if (score >= settings.minScore) {
             results.push({ path, title: entry.title, tags: entry.tags, score, tier: entry.tier });
         }

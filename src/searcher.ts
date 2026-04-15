@@ -69,7 +69,7 @@ export class SearchModal extends SuggestModal<SearchResult> {
             );
             if (!queryVec || queryVec.length === 0 || query !== this.lastQuery) return;
 
-            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings);
+            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings, query);
             this.inputEl.dispatchEvent(new Event("input"));
         } catch (e) {
             console.error("Vault Search: search failed", e);
