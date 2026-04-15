@@ -1,7 +1,7 @@
 {
   "id": "vault-search",
   "name": "Vault Search",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "minAppVersion": "1.0.0",
   "description": "Semantic search and discovery for your vault using local Ollama embeddings.",
   "author": "Jacob Mei",
