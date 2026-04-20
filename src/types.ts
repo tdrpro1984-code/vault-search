@@ -84,3 +84,31 @@ export interface SearchResult {
     score: number;
     tier: "hot" | "cold";
 }
+
+// ============================================================
+// MOC 2.0 (v0.4.0) — topic-grouped Map of Content
+// ============================================================
+
+export type MocSizeTier = "ok" | "warn" | "block";
+
+export interface Cluster {
+    /** -1 = noise; 0+ = cluster index */
+    label: number;
+    /** Indices into the source results array (SearchResult[]) */
+    noteIndices: number[];
+}
+
+export interface NamedCluster extends Cluster {
+    title: string;
+    intro: string;
+    /** true = LLM naming failed, using fallback title/intro */
+    isFallback: boolean;
+}
+
+export interface MocGroupedResult {
+    clusters: NamedCluster[];
+    /** Collected noise points; null when HDBSCAN produced none */
+    miscellaneous: NamedCluster | null;
+    totalNotes: number;
+    query: string;
+}

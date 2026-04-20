@@ -11,7 +11,9 @@ declare module "obsidian" {
 }
 import type VaultSearchPlugin from "./main";
 import { SearchResult } from "./types";
-import { checkOllama, discoverForNote, embedText, formatLocalDateTime, getContentPreview, globalDiscover, rankNotes, renderResultItem } from "./utils";
+import { checkOllama, discoverForNote, embedText, formatLocalDateTime, getContentPreview, globalDiscover, rankNotes, renderResultItem, toWikilink } from "./utils";
+import { classifyMocSize } from "./clustering";
+import { FallbackToFlatError, generateMocGrouped, NoteForMoc, renderMocGrouped } from "./moc-generator";
 import { t } from "./i18n";
 import { expandQuery } from "./synonyms";
 
@@ -321,12 +323,136 @@ export class SearchView extends ItemView {
 
     // ── MOC generation ───────────────────────────────────
 
+    /** Public: expose current-tab results for command checkCallback. */
+    getCurrentResults(): SearchResult[] {
+        if (this.activeTab === "discover") return this.lastDiscoverResults;
+        return this.lastResults;
+    }
+
     private async generateMocFromSearch() {
         await this.buildMoc(this.lastResults, "search");
     }
 
     private async generateMoc() {
         await this.buildMoc(this.lastDiscoverResults, `discover-${this.discoverMode}`);
+    }
+
+    /**
+     * MOC 2.0 entry point. Attempts topic-grouped MOC generation; falls back
+     * to the flat v0.3.0 MOC when clustering is degenerate or results < 5.
+     */
+    async generateMocGroupedFlow(): Promise<void> {
+        const results = this.getCurrentResults();
+        console.debug("[MOC 2.0] tab:", this.activeTab, "results:", results.length);
+        if (results.length === 0) {
+            new Notice(t.mocNoResults);
+            return;
+        }
+
+        const query = this.activeTab === "discover"
+            ? (this.app.workspace.getActiveFile()?.basename ?? "Discover")
+            : (this.currentQuery || "Search");
+
+        const tier = classifyMocSize(results.length);
+        console.debug("[MOC 2.0] tier:", tier, "query:", query);
+
+        if (tier === "block") {
+            if (results.length < 5) {
+                new Notice(t.mocTooFewResults);
+                if (this.activeTab === "discover") await this.generateMoc();
+                else await this.generateMocFromSearch();
+            } else {
+                new Notice(t.mocTooManyResults(results.length));
+            }
+            return;
+        }
+
+        // tier === "warn" (51-100 notes): MVP just proceeds. A confirmation
+        // modal is tracked as v0.4.1 follow-up (design D6 warn tier).
+
+        // Assemble NoteForMoc entries (requires embedding from plugin.index
+        // and frontmatter description from metadataCache).
+        const notesForMoc: NoteForMoc[] = [];
+        for (const r of results) {
+            const entry = this.plugin.index?.notes[r.path];
+            if (!entry || !entry.embedding?.length) continue;
+            const file = this.app.vault.getAbstractFileByPath(r.path);
+            let description = "";
+            if (file instanceof TFile) {
+                const cache = this.app.metadataCache.getFileCache(file);
+                description = String(cache?.frontmatter?.description ?? "");
+            }
+            notesForMoc.push({
+                path: r.path,
+                title: r.title,
+                description,
+                score: r.score,
+                embedding: entry.embedding,
+                tier: r.tier,
+                tags: r.tags,
+            });
+        }
+
+        console.debug("[MOC 2.0] notesForMoc after assembly:", notesForMoc.length,
+            "out of", results.length, "results");
+        if (notesForMoc.length < 5) {
+            const missing = results.filter(r => !this.plugin.index?.notes[r.path]?.embedding?.length);
+            console.warn("[MOC 2.0] too few notesForMoc. Missing embeddings:",
+                missing.map(r => r.path));
+            new Notice(t.mocTooFewResults);
+            if (this.activeTab === "discover") await this.generateMoc();
+            else await this.generateMocFromSearch();
+            return;
+        }
+
+        const progress = new Notice(t.mocClusteringStatus(0, notesForMoc.length), 0);
+        const onStage = (stage: "clustering" | "naming", current: number, total: number) => {
+            const text = stage === "clustering"
+                ? t.mocClusteringStatus(current, total)
+                : t.mocNamingStatus(current, total);
+            progress.setMessage(text);
+        };
+
+        try {
+            const result = await generateMocGrouped({
+                notes: notesForMoc,
+                query,
+                settings: this.plugin.settings,
+                onStage,
+            });
+            progress.hide();
+
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+            const timeStr = now.toTimeString().slice(0, 5).replace(":", "");
+            const fileName = `MOC-${dateStr}-${timeStr}-grouped.md`;
+
+            const content = renderMocGrouped(result, notesForMoc);
+            const existing = this.app.vault.getAbstractFileByPath(fileName);
+            if (existing instanceof TFile) {
+                await this.app.vault.modify(existing, content);
+            } else {
+                await this.app.vault.create(fileName, content);
+            }
+
+            new Notice(t.mocCreated(fileName));
+
+            const file = this.app.vault.getAbstractFileByPath(fileName);
+            if (file instanceof TFile) {
+                await this.app.workspace.getLeaf(false).openFile(file);
+            }
+        } catch (err) {
+            progress.hide();
+            if (err instanceof FallbackToFlatError) {
+                console.debug("[MOC 2.0] clustering degenerate, falling back to flat");
+                new Notice(t.mocClusteringDegenerate);
+                if (this.activeTab === "discover") await this.generateMoc();
+                else await this.generateMocFromSearch();
+                return;
+            }
+            console.error("Vault Search: MOC 2.0 generation failed", err);
+            new Notice(t.mocLlmUnavailable);
+        }
     }
 
     private async buildMoc(results: SearchResult[], source: string) {
@@ -383,8 +509,7 @@ export class SearchView extends ItemView {
             lines.push("");
             for (const r of hot) {
                 const preview = await this.getPreviewForResult(r);
-                const safeTitle = r.title.replace(/\|/g, "｜");
-                lines.push(`- [[${r.path.replace(/\.md$/, "")}|${safeTitle}]] (${r.score.toFixed(2)}) — ${preview}`);
+                lines.push(`- ${toWikilink(r.path, r.title)} (${r.score.toFixed(2)}) — ${preview}`);
                 lines.push("");
             }
         }
@@ -394,8 +519,7 @@ export class SearchView extends ItemView {
             lines.push("");
             for (const r of cold) {
                 const preview = await this.getPreviewForResult(r);
-                const safeTitle = r.title.replace(/\|/g, "｜");
-                lines.push(`- [[${r.path.replace(/\.md$/, "")}|${safeTitle}]] (${r.score.toFixed(2)}) — ${preview}`);
+                lines.push(`- ${toWikilink(r.path, r.title)} (${r.score.toFixed(2)}) — ${preview}`);
                 lines.push("");
             }
         }

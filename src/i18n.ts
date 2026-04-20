@@ -138,6 +138,23 @@ export interface Locale {
     instructNav: string;
     instructOpen: string;
     instructDismiss: string;
+    // MOC 2.0
+    languageLabel: string;  // e.g. "English" / "繁體中文", embedded in LLM prompts
+    cmdGenerateMocGrouped: string;
+    mocGroupedDescription: (query: string) => string;
+    mocMiscellaneous: string;
+    mocMiscIntro: string;
+    mocClusteringStatus: (current: number, total: number) => string;
+    mocNamingStatus: (current: number, total: number) => string;
+    mocTooFewResults: string;
+    mocClusteringDegenerate: string;
+    mocTooManyResults: (n: number) => string;
+    mocConfirmLarge: (n: number, seconds: number) => string;
+    mocFallbackGroup: (n: number) => string;
+    mocCanceled: string;
+    mocLlmUnavailable: string;
+    mocClusterNamingPrompt: (languageLabel: string, notesBlock: string) => string;
+    // LLM
     llmPrompt: (title: string, content: string) => string;
 }
 
@@ -280,6 +297,30 @@ const en: Locale = {
     instructNav: "navigate",
     instructOpen: "open note",
     instructDismiss: "dismiss",
+    languageLabel: "English",
+    cmdGenerateMocGrouped: "Generate MOC (topic-grouped)",
+    mocGroupedDescription: (query) => `Topic-grouped MOC from query: ${query}`,
+    mocMiscellaneous: "Miscellaneous",
+    mocMiscIntro: "Notes related to the query but not fitting the above groups.",
+    mocClusteringStatus: (current, total) => `Grouping ${current}/${total} notes...`,
+    mocNamingStatus: (current, total) => `Naming group ${current}/${total}...`,
+    mocTooFewResults: "Less than 5 results, generating flat MOC instead",
+    mocClusteringDegenerate: "Results share a single topic; generating flat MOC instead",
+    mocTooManyResults: (n) => `Too many results (${n}). Narrow down with tag or folder filter first.`,
+    mocConfirmLarge: (n, seconds) => `${n} notes will take ~${seconds}s to organize. Continue?`,
+    mocFallbackGroup: (n) => `Group ${n}`,
+    mocCanceled: "MOC generation canceled. Partial result saved.",
+    mocLlmUnavailable: "LLM unavailable, clusters saved without names",
+    mocClusterNamingPrompt: (languageLabel, notesBlock) => `You are organizing a knowledge vault. Below are notes that have been grouped together because they discuss related topics. Based on the common theme, produce:
+
+- title: a concise heading (3-8 words or ${languageLabel} characters)
+- intro: 1-2 sentences (40-80 characters) describing what ties these notes together
+
+Notes:
+${notesBlock}
+
+Respond with valid JSON only, in ${languageLabel}:
+{"title": "...", "intro": "..."}`,
     llmPrompt: (title, content) => `Task: Generate a description and tags for this note.
 
 Rules:
@@ -435,6 +476,30 @@ const zhTW: Locale = {
     instructNav: "瀏覽",
     instructOpen: "開啟筆記",
     instructDismiss: "關閉",
+    languageLabel: "繁體中文",
+    cmdGenerateMocGrouped: "生成 MOC（主題分群）",
+    mocGroupedDescription: (query) => `主題分群的 MOC，來自查詢：${query}`,
+    mocMiscellaneous: "其他",
+    mocMiscIntro: "與查詢相關但未歸入上述群組的筆記。",
+    mocClusteringStatus: (current, total) => `正在分群 ${current}/${total} 筆筆記…`,
+    mocNamingStatus: (current, total) => `正在命名群組 ${current}/${total}…`,
+    mocTooFewResults: "結果少於 5 筆，改產生平面 MOC",
+    mocClusteringDegenerate: "結果主題過於相近，改產生平面 MOC",
+    mocTooManyResults: (n) => `結果過多（${n} 筆），請先用標籤或資料夾過濾`,
+    mocConfirmLarge: (n, seconds) => `${n} 筆筆記需約 ${seconds} 秒組織，是否繼續？`,
+    mocFallbackGroup: (n) => `群組 ${n}`,
+    mocCanceled: "MOC 生成已取消，已儲存部分結果。",
+    mocLlmUnavailable: "LLM 無法使用，群組已儲存但未命名",
+    mocClusterNamingPrompt: (languageLabel, notesBlock) => `你正在整理一個知識庫。以下筆記因為討論相關主題而被分為一群。根據共同主題，產出：
+
+- title：精煉標題（3-8 個${languageLabel}字）
+- intro：1-2 句介紹（40-80 字），描述這群筆記的共通主題
+
+筆記：
+${notesBlock}
+
+只回覆有效的 JSON（使用${languageLabel}）：
+{"title": "...", "intro": "..."}`,
     llmPrompt: (title, content) => `任務：為筆記產生 description 和 tags。
 
 規則：

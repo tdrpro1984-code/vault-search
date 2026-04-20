@@ -1,6 +1,6 @@
-import { Notice, requestUrl, TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import type VaultSearchPlugin from "./main";
-import { checkOllama, formatLocalDateTime, stripFrontmatter, validateServerUrl } from "./utils";
+import { checkOllama, formatLocalDateTime, requestLlmJson, stripFrontmatter } from "./utils";
 import { t } from "./i18n";
 
 interface DescAction {
@@ -242,53 +242,16 @@ export class DescriptionGenerator {
         content: string,
     ): Promise<{ description: string; tags?: string[] }> {
         const prompt = t.llmPrompt(title, content);
-        validateServerUrl(url);
-
-        const apiKey = this.plugin.settings.apiKey;
-        const apiFormat = this.plugin.settings.apiFormat;
-        const headers: Record<string, string> = { "Content-Type": "application/json" };
-        if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
-
-        const isOpenAI = apiFormat === "openai";
-        const endpoint = isOpenAI ? `${url}/v1/chat/completions` : `${url}/api/chat`;
-        const body = isOpenAI
-            ? JSON.stringify({
-                model,
-                messages: [{ role: "user", content: prompt }],
-                response_format: { type: "json_object" },
-            })
-            : JSON.stringify({
-                model,
-                messages: [{ role: "user", content: prompt }],
-                stream: false,
-                format: "json",
-                think: false,
-            });
-
-        let timer: ReturnType<typeof setTimeout>;
-        const resp = await Promise.race([
-            requestUrl({
-                url: endpoint,
-                method: "POST",
-                headers,
-                body,
-                throw: false,
-            }).finally(() => clearTimeout(timer)),
-            new Promise<never>((_, reject) => {
-                timer = setTimeout(() => reject(new Error("LLM timeout (60s)")), 60000);
-            }),
-        ]);
-
-        if (resp.status !== 200) {
-            const errText = resp.text;
-            throw new Error(`LLM ${resp.status}: ${errText.length > 200 ? errText.slice(0, 200) + "..." : errText}`);
-        }
-
-        const data = resp.json;
-        const raw = isOpenAI
-            ? (data.choices?.[0]?.message?.content ?? "")
-            : (data.message?.content ?? "");
-        return this.parseGeneratedJSON(raw);
+        return requestLlmJson(
+            {
+                ollamaUrl: url,
+                llmModel: model,
+                apiFormat: this.plugin.settings.apiFormat,
+                apiKey: this.plugin.settings.apiKey,
+            },
+            prompt,
+            (raw) => this.parseGeneratedJSON(raw),
+        );
     }
 
     private parseGeneratedJSON(raw: string): { description: string; tags?: string[] } {

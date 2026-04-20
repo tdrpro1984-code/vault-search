@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
 import type VaultSearchPlugin from "./main";
-import { fetchOllamaModels } from "./utils";
+import { fetchOllamaModels, formatLocalDateTime } from "./utils";
 import { t } from "./i18n";
 
 export class VaultSearchSettingTab extends PluginSettingTab {
@@ -275,7 +275,11 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             stats.createEl("p", { text: `${t.hot}: ${hot} / ${t.cold}: ${cold}` });
             stats.createEl("p", { text: `${t.model}: ${index.meta.model}` });
             stats.createEl("p", { text: `${t.dimensions}: ${index.meta.dim}` });
-            stats.createEl("p", { text: `${t.lastIndexed}: ${index.meta.indexedAt}` });
+            const indexedDate = new Date(index.meta.indexedAt);
+            const localTime = isNaN(indexedDate.getTime())
+                ? index.meta.indexedAt
+                : formatLocalDateTime(indexedDate);
+            stats.createEl("p", { text: `${t.lastIndexed}: ${localTime}` });
         }
 
         // Section 2: Description Generator

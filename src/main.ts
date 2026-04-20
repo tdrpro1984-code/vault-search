@@ -95,6 +95,20 @@ export default class VaultSearchPlugin extends Plugin {
             callback: () => void this.openGlobalDiscover(),
         });
 
+        this.addCommand({
+            id: "generate-moc-grouped",
+            name: t.cmdGenerateMocGrouped,
+            checkCallback: (checking) => {
+                const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
+                const view = leaf?.view as SearchView | undefined;
+                const results = view?.getCurrentResults() ?? [];
+                if (results.length < 5) return false;
+                if (checking) return true;
+                void view!.generateMocGroupedFlow();
+                return true;
+            },
+        });
+
         // Active Discovery: file-open listener
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {

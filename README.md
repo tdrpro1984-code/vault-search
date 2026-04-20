@@ -52,6 +52,23 @@ No cloud services. No API keys. No subscription fees. Your notes never leave you
 
 > *"AI helps you see. You decide what it means."*
 
+## What makes Vault Search different
+
+Semantic search plugins in the Obsidian ecosystem generally stop at "find what you mean" — a smarter search box. Vault Search treats search as a starting point, not the destination. A quick tour of what that unlocks:
+
+| Capability | Why it matters |
+|---|---|
+| **Discover tab, not just a search modal** | Opens a persistent sidebar that keeps surfacing related notes as you read and write — no command, no query, no interruption. |
+| **Hot / Cold tiering** | Every note is automatically classified by linkage and recency. Cold (orphan) notes get surfaced next to your Hot ones, turning your forgotten vault into a living backlog. |
+| **LLM-generated descriptions** | A local LLM writes a concise frontmatter description for each note so the embedding model works on curated summaries, not raw body text. Search and Discover quality improves noticeably on long notes. |
+| **One-click MOC generation** | Turn any search or Discover result set into a Map of Content note with wikilinks and previews. Useful for research, weekly reviews, and writing outlines. |
+| **Chinese-native from day one** | Tuned for `qwen3-embedding`, with synonym expansion, title keyword boost, and a bilingual UI. Traditional Chinese + English queries work out of the box. |
+| **Clean, incremental index** | The index lives outside your notes — no stray CSVs in your vault root. File changes re-index automatically in the background. |
+| **Canvas & right-click integration** | Drag results onto Canvas for visual mapping; right-click for Obsidian's native file menu (bookmark, rename, reveal). Search results feel like first-class Obsidian citizens. |
+| **Fully local, fully private** | Embedding, indexing, search, and descriptions all run on your machine via Ollama or any OpenAI-compatible server. No cloud, no keys required, no telemetry. |
+
+If you just want a better search box, plenty of options exist. Vault Search is for people who want their vault to *talk back*.
+
 ## Features
 
 ### Search

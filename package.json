@@ -1,13 +1,17 @@
 {
   "name": "vault-search",
-  "version": "0.3.1",
+  "version": "0.4.0-beta.1",
   "description": "Semantic search for your Obsidian vault using local embeddings",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production"
   },
-  "keywords": ["obsidian", "semantic-search", "embeddings"],
+  "keywords": [
+    "obsidian",
+    "semantic-search",
+    "embeddings"
+  ],
   "author": "Jacob Mei",
   "license": "MIT",
   "devDependencies": {
@@ -15,5 +19,8 @@
     "esbuild": "^0.25.0",
     "obsidian": "latest",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "hdbscan-ts": "^1.0.17"
   }
 }

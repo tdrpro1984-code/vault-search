@@ -144,6 +144,79 @@ export async function embedTexts(
     return data.embeddings ?? [];
 }
 
+const LLM_TIMEOUT_MS = 60000;
+
+/**
+ * Unified LLM JSON request with Ollama and OpenAI-compatible support.
+ * The caller supplies a `parse` function that converts the raw content
+ * string to T — it may throw on invalid payloads.
+ */
+export async function requestLlmJson<T>(
+    settings: {
+        ollamaUrl: string;
+        llmModel: string;
+        apiFormat: ApiFormat;
+        apiKey?: string;
+    },
+    prompt: string,
+    parse: (raw: string) => T,
+    opts: { timeoutMs?: number } = {},
+): Promise<T> {
+    validateServerUrl(settings.ollamaUrl);
+    const isOpenAI = settings.apiFormat === "openai";
+    const endpoint = isOpenAI
+        ? `${settings.ollamaUrl}/v1/chat/completions`
+        : `${settings.ollamaUrl}/api/chat`;
+
+    const body = isOpenAI
+        ? JSON.stringify({
+            model: settings.llmModel,
+            messages: [{ role: "user", content: prompt }],
+            response_format: { type: "json_object" },
+        })
+        : JSON.stringify({
+            model: settings.llmModel,
+            messages: [{ role: "user", content: prompt }],
+            stream: false,
+            format: "json",
+            think: false,
+        });
+
+    const resp = await withTimeout(
+        requestUrl({
+            url: endpoint,
+            method: "POST",
+            headers: buildHeaders(settings.apiKey),
+            body,
+            throw: false,
+        }),
+        opts.timeoutMs ?? LLM_TIMEOUT_MS,
+        "LLM",
+    );
+
+    if (resp.status !== 200) {
+        throw new Error(`LLM ${resp.status}: ${truncateError(resp.text)}`);
+    }
+
+    const data = resp.json;
+    const raw = isOpenAI
+        ? (data.choices?.[0]?.message?.content ?? "")
+        : (data.message?.content ?? "");
+    return parse(raw);
+}
+
+/**
+ * Build an Obsidian wikilink from a note path + display title.
+ * Strips `.md` extension, escapes `|` in title to `｜` (fullwidth)
+ * so the display alias does not terminate early. Title `[`/`]` are
+ * left as-is to preserve v0.3.x byte-for-byte output.
+ */
+export function toWikilink(path: string, title: string): string {
+    const target = path.replace(/\.md$/, "");
+    const safeTitle = title.replace(/\|/g, "\uff5c");
+    return `[[${target}|${safeTitle}]]`;
+}
+
 export function splitChunks(text: string, size: number, overlap: number): string[] {
     if (text.length <= size) return [text];
     if (overlap >= size) overlap = 0;
