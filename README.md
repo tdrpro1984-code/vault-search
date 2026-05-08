@@ -1,151 +1,127 @@
-<p align="center">
-  <h1 align="center">Vault Search</h1>
-  <p align="center">Local-first semantic search & discovery for Obsidian — simple, private, Chinese-friendly</p>
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://github.com/notoriouslab/vault-search/releases"><img src="https://img.shields.io/github/v/release/notoriouslab/vault-search?style=flat-square" alt="Release"></a>
-  <a href="https://github.com/notoriouslab/vault-search/releases"><img src="https://img.shields.io/github/downloads/notoriouslab/vault-search/total?style=flat-square&color=573E7A" alt="Downloads"></a>
-  <a href="https://github.com/notoriouslab/vault-search/blob/main/LICENSE"><img src="https://img.shields.io/github/license/notoriouslab/vault-search?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Obsidian-Desktop-7C3AED?style=flat-square&logo=obsidian" alt="Obsidian Desktop">
-  <img src="https://img.shields.io/badge/Ollama-Local_AI-000?style=flat-square" alt="Ollama">
-  <a href="https://github.com/TfTHacker/obsidian42-brat"><img src="https://img.shields.io/badge/BRAT-Available-blue?style=flat-square" alt="BRAT"></a>
-</p>
+# Vault Search
 
-<p align="center">
-  <a href="./README.zh-TW.md">繁體中文</a>
-</p>
+[![Release](https://img.shields.io/github/v/release/notoriouslab/vault-search?style=flat-square)](https://github.com/notoriouslab/vault-search/releases)
+[![Downloads](https://img.shields.io/github/downloads/notoriouslab/vault-search/total?style=flat-square&color=573E7A)](https://github.com/notoriouslab/vault-search/releases)
+[![License](https://img.shields.io/github/license/notoriouslab/vault-search?style=flat-square)](LICENSE)
+[![Obsidian Desktop](https://img.shields.io/badge/Obsidian-Desktop-7C3AED?style=flat-square&logo=obsidian)](https://obsidian.md/)
+[![Ollama Local AI](https://img.shields.io/badge/Ollama-Local_AI-000?style=flat-square)](https://ollama.com/)
+[![BRAT Available](https://img.shields.io/badge/BRAT-Available-blue?style=flat-square)](https://github.com/TfTHacker/obsidian42-brat)
+[![Last Commit](https://img.shields.io/github/last-commit/notoriouslab/vault-search)](https://github.com/notoriouslab/vault-search)
+
+**Local-first semantic search & discovery for Obsidian — find what you mean, rediscover what you forgot. Simple, private, Chinese-friendly.**
+
+[繁體中文](./README.zh-TW.md)
+
+</div>
 
 ---
 
-> *Vault Search helps you **search by meaning** and **rediscover forgotten notes**.*
+**Search by meaning. Rediscover what you forgot. All local, all private.**
 
-No cloud services. No API keys. No subscription fees. Your notes never leave your machine.
+No cloud services. No API keys. No subscription. Your notes never leave your machine.
 
 ![Search Panel](./docs/search-panel.png)
 
-## Why Vault Search?
+## Core Positioning
 
-[Andrej Karpathy shared](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/) his vision of LLM-maintained knowledge bases — letting AI "compile" your notes into a structured wiki. It's a compelling approach, but it assumes you're ready to hand full editorial control to an LLM.
+[Andrej Karpathy shared](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/) his vision of LLM-maintained knowledge bases — letting AI "compile" your notes into structured wikis. Compelling, but it asks you to hand over full editorial control.
 
-**Vault Search takes a different stance.** AI should help you *see*, not think for you. The best tool doesn't replace your writing — it helps you **rediscover** what you already know, and surfaces connections you missed.
+**Vault Search takes a different stance:** AI should help you *see*, not think for you. The best tools don't replace your writing — they help you **rediscover** what you already know and surface the connections you missed.
 
-### What sets Vault Search apart
+### Why Vault Search matters
 
-**Discover, not organize** — Other tools build AI wikis or auto-summaries. Vault Search finds the notes *you* should be looking at. The Discover tab shows related notes you haven't connected yet — especially Cold (isolated) notes hiding in your vault.
+| Feature | What it unlocks |
+|---------|-----------------|
+| **Discover, not organize** | Find notes you *should* be reading, not force you to reorganize. The Discover tab surfaces Cold (orphan) notes semantically related to your thinking—your blind spots become visible. |
+| **Hot/Cold tiering** | Every note is auto-classified by links and recency. Cold notes hiding in your vault get spotted next to your active Hot notes, turning forgotten vaults into living backlogs. |
+| **MOC generation** | One click exports search or Discover results as a Map of Content note with wikilinks and previews. You design; AI gathers. |
+| **Fully local + private** | Embedding, indexing, search, and LLM descriptions all run on your machine via Ollama or OpenAI-compatible servers. Zero cloud, zero keys, zero telemetry. |
+| **Chinese-native design** | Built with `qwen3-embedding:0.6b` and synonym expansion. Traditional Chinese + English queries work seamlessly out of the box. |
+| **Obsidian-native UX** | Sidebar Search/Discover tabs, Cmd/Ctrl+P modal, right-click file menu integration, Canvas drag-drop. Results feel like first-class Obsidian citizens. |
+| **LLM-powered summaries** | Local LLM generates frontmatter descriptions for your notes, so embeddings work on curated summaries instead of raw text. Dramatically better relevance on long notes. |
+| **Lightweight** | 8GB laptops. Recommended models fit on MacBook M2. Incremental indexing + debounce = near-zero daily overhead. |
 
-**Hot/Cold intelligence** — Notes with links or recent activity are Hot. Orphan notes are Cold. Discover surfaces Cold notes that are semantically related to your current thinking — your blind spots become visible.
-
-**MOC generation** — One click turns search or discover results into a Map of Content note with wikilinks and previews. You decide the structure; AI just gathers the pieces.
-
-**Truly local, truly private** — All embedding, indexing, search, and discovery happen on your machine. Zero data leaves your computer. This isn't a toggle; it's the architecture.
-
-**Simple and fast** — Sidebar panel with Search and Discover tabs. Cmd/Ctrl+P for instant modal search. Right-click results for Obsidian's native file menu. Drag results to Canvas for visual mapping.
-
-**Optimized for Chinese** — Built with `qwen3-embedding:0.6b`, which excels at Traditional Chinese + English semantic understanding. Combined with synonym expansion, even different phrasings of the same concept will match.
-
-**LLM-powered descriptions** — A local LLM generates frontmatter descriptions for your notes, giving the embedding model a high-quality summary to work with. This dramatically improves search and Discover relevance for long notes.
-
-**Runs on 8GB laptops** — Minimal memory and CPU footprint. Recommended models work on a MacBook M2 with 8GB RAM. Incremental indexing + debounce means near-zero overhead in daily use.
-
-**Flexible and compatible** — Works with Ollama, LM Studio, llama.cpp, vLLM, or any OpenAI-compatible server. Choose the models that work best for your language and hardware.
-
-> *"AI helps you see. You decide what it means."*
-
-## What makes Vault Search different
-
-Semantic search plugins in the Obsidian ecosystem generally stop at "find what you mean" — a smarter search box. Vault Search treats search as a starting point, not the destination. A quick tour of what that unlocks:
-
-| Capability | Why it matters |
-|---|---|
-| **Discover tab, not just a search modal** | Opens a persistent sidebar that keeps surfacing related notes as you read and write — no command, no query, no interruption. |
-| **Hot / Cold tiering** | Every note is automatically classified by linkage and recency. Cold (orphan) notes get surfaced next to your Hot ones, turning your forgotten vault into a living backlog. |
-| **LLM-generated descriptions** | A local LLM writes a concise frontmatter description for each note so the embedding model works on curated summaries, not raw body text. Search and Discover quality improves noticeably on long notes. |
-| **One-click MOC generation** | Turn any search or Discover result set into a Map of Content note with wikilinks and previews. Useful for research, weekly reviews, and writing outlines. |
-| **Chinese-native from day one** | Tuned for `qwen3-embedding`, with synonym expansion, title keyword boost, and a bilingual UI. Traditional Chinese + English queries work out of the box. |
-| **Clean, incremental index** | The index lives outside your notes — no stray CSVs in your vault root. File changes re-index automatically in the background. |
-| **Canvas & right-click integration** | Drag results onto Canvas for visual mapping; right-click for Obsidian's native file menu (bookmark, rename, reveal). Search results feel like first-class Obsidian citizens. |
-| **Fully local, fully private** | Embedding, indexing, search, and descriptions all run on your machine via Ollama or any OpenAI-compatible server. No cloud, no keys required, no telemetry. |
-
-If you just want a better search box, plenty of options exist. Vault Search is for people who want their vault to *talk back*.
-
-## Features
-
-### Search
-- **Semantic Search** — Find notes by meaning, not just keywords
-- **Sidebar Panel** — Persistent results with Search and Discover tabs
-- **Quick Modal** — Cmd/Ctrl+P for fast note jumping
-- **Find Similar** — Discover related notes instantly (zero API calls)
-- **Smart Indexing** — Incremental updates, auto-indexes on file changes
-- **Hot/Cold Tiers** — Hot = linked/recent, Cold = isolated/orphan
-- **Chunking** — Optional overlapping chunks for long documents
-
-### Discover (v0.3.0)
-- **Active Discovery** — Open a note, sidebar auto-shows related notes with Cold notes highlighted
-- **Global Discover** — Find Cold notes most related to your Hot (active) notes
-- **MOC Generation** — Export search or discover results as a Map of Content note
-- **Cold Search Scope** — Dedicated "Cold only" search mode for intentional exploration
-- **Tier Badges** — Visual markers distinguish Hot and Cold results at a glance
-- **Canvas Integration** — Drag any result directly onto Canvas for visual mapping
-- **Context Menu** — Right-click results for Obsidian's native file menu (Bookmark, etc.)
-
-### Description Generator
-- **LLM Descriptions** — Local LLM generates frontmatter descriptions
-- **Synonym Expansion** — Define synonyms to improve recall
-- **Bilingual UI** — English & Traditional Chinese (auto-detected)
-
-## Requirements
-
-- [Ollama](https://ollama.com/) installed and running
-- An embedding model (e.g., `ollama pull qwen3-embedding:0.6b`)
-- An LLM model for description generation (e.g., `ollama pull qwen3:1.7b`) (optional)
-- Obsidian desktop
-
-## Installation
-
-### BRAT (recommended while pending community review)
-
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
-2. Add this repository: `notoriouslab/vault-search`
-3. Enable "Vault Search" in Community plugins
-
-### Manual
-
-1. Download `main.js`, `manifest.json`, `styles.css` from the [latest release](https://github.com/notoriouslab/vault-search/releases)
-2. Copy to `.obsidian/plugins/vault-search/` in your vault
-3. Enable in Settings → Community plugins
-
-> **Note:** If your vault is tracked by Git, add `.obsidian/plugins/*/data.json` to `.gitignore` to avoid accidentally committing API keys or personal settings.
+---
 
 ## Quick Start
 
-1. **Settings → Vault Search** → Select your embedding model
-2. Click **Rebuild** to index your vault
-3. **Cmd/Ctrl+P → "Semantic search"** or click the compass icon
-4. Switch to the **Discover** tab to see related notes for the current file
+1. **Install** — BRAT or manual; see [Installation](#installation) below
+2. **Settings → Vault Search** — Select your embedding model (default: `qwen3-embedding:0.6b`)
+3. **Click "Rebuild"** — Full index of your vault
+4. **Cmd/Ctrl+P → "Semantic search"** or open the **Discover** tab
 
 ### Recommended Workflow
 
+For best search and Discover quality:
+
 ```
-1. Generate descriptions  →  2. Rebuild index  →  3. Search & Discover
-   (LLM summarizes notes)    (embed with descriptions)   (find and rediscover)
+Generate descriptions → Rebuild index → Search & Discover
+(LLM summarizes notes)  (embed with summaries)  (find and rediscover)
 ```
 
-**Why this order?** The indexer uses frontmatter `description` preferentially for embedding. Descriptions first → better search and Discover quality.
+**Quick setup:** Just Rebuild and search (skip descriptions for speed).  
+**Best quality:** Generate descriptions (preview) → review → Apply → Rebuild.
 
-- **Minimal setup**: Skip step 1, just Rebuild and search.
-- **Best quality**: **Generate descriptions (preview)** → review → **Apply** → **Rebuild index**.
+---
 
-### Discover Workflow
+## Core Features
 
-The Discover tab has two modes:
+### Search Panel (Sidebar)
+- **Semantic search** — Find notes by meaning, not keywords
+- **Search & Discover tabs** — Persistent results as you read and write
+- **Hot/Cold badges** — Visual distinction of linked vs. orphan notes
+- **Chunking mode** — Optional: break long documents into overlapping segments
+- **Similarity threshold** — Adjust Min Score to filter results (0–1)
 
-- **Current note** — Shows notes related to whatever you're reading. Cold notes are highlighted — these are your blind spots.
-- **Global** — Shows Cold notes most related to your entire Hot pool. Great for finding forgotten gems after importing lots of files.
+### Discover Tab
+- **Active mode** — Open a note → sidebar auto-shows related notes (Cold notes highlighted)
+- **Global mode** — Surface Cold notes most related to your entire Hot pool
+- **MOC export** — One-click Map of Content with wikilinks and previews
+- **Cold-only search** — Dedicated mode for intentional exploration of orphan notes
 
-Click **Generate MOC** to export results as a linked note.
+### Description Generator (LLM)
+- **Auto-summaries** — Local LLM writes frontmatter descriptions for each note
+- **Better embeddings** — Embedding model uses summaries instead of raw text
+- **Quality boost** — Especially noticeable on long, multi-topic notes
+- **Synonym expansion** — Define synonyms to improve recall
 
-## Settings
+### Modal Search (Cmd/Ctrl+P)
+- **Instant search** — Quick modal with keyboard nav
+- **Canvas drag-drop** — Drag results onto Canvas for visual mapping
+- **Right-click menu** — Native Obsidian file operations (bookmark, rename, etc.)
+
+---
+
+## Installation & Setup
+
+### Requirements
+
+- [Obsidian](https://obsidian.md/) desktop
+- [Ollama](https://ollama.com/) running locally (or any OpenAI-compatible server)
+- Embedding model — `ollama pull qwen3-embedding:0.6b` (recommended)
+- LLM (optional) — `ollama pull qwen3:1.7b` for description generation
+
+### Install Plugin
+
+**BRAT (recommended, fastest):**
+1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
+2. Add repository: `notoriouslab/vault-search`
+3. Enable "Vault Search" in Settings → Community plugins
+
+**Manual:**
+1. Download `main.js`, `manifest.json`, `styles.css` from [releases](https://github.com/notoriouslab/vault-search/releases)
+2. Copy to `.obsidian/plugins/vault-search/` in your vault
+3. Enable in Settings → Community plugins
+
+> **Tip:** If vault is Git-tracked, add `.obsidian/plugins/*/data.json` to `.gitignore`.
+
+---
+
+## Advanced Reference
+
+### Settings
 
 <details>
 <summary><strong>Search & Index</strong></summary>
@@ -180,61 +156,55 @@ Click **Generate MOC** to export results as a linked note.
 
 </details>
 
-## Commands
+### Commands (Command Palette)
 
-All commands are prefixed with **Vault Search:** in the Command Palette (Cmd/Ctrl+P).
+All prefixed with **Vault Search:**
 
-| Command | Description |
-|---|---|
-| Semantic search (modal) | Quick search with keyboard navigation |
-| Open search panel | Sidebar with Search and Discover tabs |
-| Find similar notes | Related notes for current file |
-| Discover related Cold notes | Global discover — find hidden gems |
-| Rebuild index | Full re-index |
-| Update index | Incremental update |
-| Generate descriptions (preview) | LLM generates descriptions → report |
-| Apply descriptions | Write previewed descriptions to frontmatter |
+| Command | Purpose |
+|---------|---------|
+| **Semantic search (modal)** | Quick search with keyboard nav |
+| **Open search panel** | Sidebar with Search & Discover tabs |
+| **Find similar notes** | Related notes for current file |
+| **Discover related Cold notes** | Global discover — find hidden gems |
+| **Rebuild index** | Full re-index (run after settings changes) |
+| **Update index** | Incremental update |
+| **Generate descriptions (preview)** | LLM drafts descriptions, preview before apply |
+| **Apply descriptions** | Write descriptions to frontmatter |
 
-## How It Works
+### How It Works
 
 ```
-┌─────────────┐     ┌──────────┐     ┌──────────────┐
-│  Your Notes │────▶│  Ollama  │────▶│ Vector Index │
-│  (.md)      │     │ Embed API│     │ (index.json) │
-└─────────────┘     └──────────┘     └──────┬───────┘
-                                            │
-┌─────────────┐     ┌──────────┐            │
-│  Your Query │────▶│  Ollama  │──── cosine similarity
-│             │     │ Embed API│            │
-└─────────────┘     └──────────┘     ┌──────▼───────┐
-                                     │   Results    │
-                                     │ (ranked)     │
-                                     └──────┬───────┘
-                                            │
-                               ┌────────────▼────────────┐
-                               │   Discover (no Ollama)  │
-                               │   Pure vector math on   │
-                               │   existing embeddings   │
-                               └─────────────────────────┘
+Your notes (.md)
+    ↓
+Ollama Embed API  ←  [Synonym expansion]
+    ↓
+Vector Index (index.json) 
+    ↓
+    ├─ Search query → cosine similarity → ranked results
+    ├─ Discover → vector math (no API calls) → Cold notes surfaced
+    └─ Hot/Cold classification (links + recency)
 ```
 
-1. **Index** — Note content (or description) → embedding model → vector stored in `index.json`
-2. **Search** — Query (+ synonym expansion) → same model → cosine similarity → ranked results
-3. **Discover** — No API calls. Compares existing embeddings to surface related Cold notes
-4. **Hot/Cold** — Linked/recent = Hot. Orphan = Cold. Discover highlights Cold notes in your blind spot
-5. **MOC** — Export results as a Map of Content note with wikilinks and previews
-6. **Descriptions** — Local LLM summarizes notes → stored in frontmatter → used for better embeddings
+**Workflow:**
+1. **Index** — Note (or description) → embedding model → vector in `index.json`
+2. **Search** — Query + synonyms → embedding → cosine similarity → results
+3. **Discover** — Pure vector math on existing embeddings (no API)
+4. **Hot/Cold** — Auto-classified by links and recency
+5. **MOC** — Export results as linked note with previews
+6. **Descriptions** — Local LLM → frontmatter → better embeddings
 
-## Recommended Models
+### Model Recommendations
 
-| Model | Size | Use | Notes |
-|---|---|---|---|
-| `qwen3-embedding:0.6b` | 639MB | Embedding | Best for Chinese + English |
-| `nomic-embed-text` | 274MB | Embedding | Lighter, English-focused |
-| `qwen3:1.7b` | 1.4GB | LLM | Good quality, handles 2000+ chars |
-| `gemma3:1b` | 815MB | LLM | Lighter, but unstable > 500 chars input |
+| Model | Size | Type | Notes |
+|-------|------|------|-------|
+| `qwen3-embedding:0.6b` | 639 MB | Embedding | **Recommended** — Chinese + English |
+| `nomic-embed-text` | 274 MB | Embedding | Lighter, English-focused |
+| `qwen3:1.7b` | 1.4 GB | LLM | **Recommended** — quality + speed |
+| `gemma3:1b` | 815 MB | LLM | Lighter, unstable >500 char input |
 
-> For 8GB RAM machines, use `qwen3-embedding:0.6b` + `qwen3:1.7b`. Both fit comfortably.
+**For 8GB RAM:** Use `qwen3-embedding:0.6b` + `qwen3:1.7b` — both fit comfortably.
+
+---
 
 ## Development
 
@@ -245,6 +215,8 @@ npm install
 npm run dev    # watch mode
 npm run build  # production build
 ```
+
+---
 
 ## License
 

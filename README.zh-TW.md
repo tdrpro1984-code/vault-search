@@ -1,240 +1,204 @@
-<p align="center">
-  <h1 align="center">Vault Search</h1>
-  <p align="center">Obsidian 本地語意搜尋與發掘 — 簡單、隱私、中文友善</p>
-</p>
+<div align="center">
 
-<p align="center">
-  <a href="https://github.com/notoriouslab/vault-search/releases"><img src="https://img.shields.io/github/v/release/notoriouslab/vault-search?style=flat-square" alt="Release"></a>
-  <a href="https://github.com/notoriouslab/vault-search/releases"><img src="https://img.shields.io/github/downloads/notoriouslab/vault-search/total?style=flat-square&color=573E7A" alt="Downloads"></a>
-  <a href="https://github.com/notoriouslab/vault-search/blob/main/LICENSE"><img src="https://img.shields.io/github/license/notoriouslab/vault-search?style=flat-square" alt="License"></a>
-  <img src="https://img.shields.io/badge/Obsidian-Desktop-7C3AED?style=flat-square&logo=obsidian" alt="Obsidian Desktop">
-  <img src="https://img.shields.io/badge/Ollama-本地AI-000?style=flat-square" alt="Ollama">
-  <a href="https://github.com/TfTHacker/obsidian42-brat"><img src="https://img.shields.io/badge/BRAT-可用-blue?style=flat-square" alt="BRAT"></a>
-</p>
+# Vault Search
 
-<p align="center">
-  <a href="./README.md">English</a>
-</p>
+[![Release](https://img.shields.io/github/v/release/notoriouslab/vault-search?style=flat-square)](https://github.com/notoriouslab/vault-search/releases)
+[![Downloads](https://img.shields.io/github/downloads/notoriouslab/vault-search/total?style=flat-square&color=573E7A)](https://github.com/notoriouslab/vault-search/releases)
+[![License](https://img.shields.io/github/license/notoriouslab/vault-search?style=flat-square)](LICENSE)
+[![Obsidian Desktop](https://img.shields.io/badge/Obsidian-Desktop-7C3AED?style=flat-square&logo=obsidian)](https://obsidian.md/)
+[![Ollama 本地 AI](https://img.shields.io/badge/Ollama-本地AI-000?style=flat-square)](https://ollama.com/)
+[![BRAT 可用](https://img.shields.io/badge/BRAT-可用-blue?style=flat-square)](https://github.com/TfTHacker/obsidian42-brat)
+[![Last Commit](https://img.shields.io/github/last-commit/notoriouslab/vault-search)](https://github.com/notoriouslab/vault-search)
+
+**Obsidian 本地語意搜尋與發掘 — 找到你想要的，重新發現你遺忘的。簡單、隱私、中文友善。**
+
+[English](./README.md)
+
+</div>
 
 ---
 
-> *Vault Search 幫你**語意搜尋**，也幫你**重新發掘被遺忘的筆記**。*
+**語意搜尋。重新發現被遺忘的筆記。完全本地，真正隱私。**
 
 不需要雲端服務、不需要 API Key、不需要付費訂閱。筆記不離開你的電腦。
 
 ![搜尋面板](./docs/search-panel.png)
 
-## 為什麼選擇 Vault Search？
+## 核心定位
 
-[Andrej Karpathy 分享了](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/)他用 LLM 維護知識庫的願景 — 讓 AI「編譯」你的筆記成結構化 wiki。這是個很吸引人的做法，但前提是你願意把編輯權完全交給 LLM。
+[Andrej Karpathy 分享了](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/)他用 LLM 維護知識庫的願景 — 讓 AI「編譯」你的筆記成結構化 wiki。很吸引人，但前提是你願意把編輯權完全交給 AI。
 
-**Vault Search 則認為：** AI 應該幫你*看見*，而不是替你思考。最好的工具不是取代你的寫作，而是幫你**重新發現**你已經知道的東西，並浮出你遺漏的連結。
+**Vault Search 的信念不同：** AI 應該幫你*看見*，而不是替你思考。最好的工具不會取代你的寫作，而是幫你**重新發現**你已知的，浮出你遺漏的連結。
 
-### 核心優勢
+### 為什麼 Vault Search 重要
 
-**發掘，而非整理** — 其他工具忙著幫你建 AI wiki 或自動摘要。Vault Search 找的是你*該去看*的筆記。「發掘」分頁會顯示你還沒連結過的相關筆記 — 特別是躲在 vault 裡的 Cold（孤立）筆記。
+| 功能 | 它解鎖了什麼 |
+|------|-----------|
+| **發掘，而非整理** | 找你*該去看*的筆記，不是強迫重組織。「發掘」分頁浮出語意相關的 Cold（孤立）筆記 — 你的盲區變得可見。 |
+| **Hot/Cold 自動分層** | 每筆筆記根據連結和更新日期自動分類。Cold 筆記會和 Hot 活躍筆記一起浮出，把被遺忘的 vault 變成活的待辦清單。 |
+| **MOC 一鍵生成** | 搜尋或發掘結果匯出成 Map of Content，帶 wikilink 和預覽。你設計結構；AI 蒐集素材。 |
+| **完全本地 + 完全隱私** | Embedding、索引、搜尋、LLM 描述都在你的電腦跑。零雲端、零 API、零追蹤。 |
+| **中文優先設計** | 用 `qwen3-embedding:0.6b` 和同義詞擴展。繁體中文 + 英文查詢開箱即用。 |
+| **Obsidian 原生體驗** | 側邊欄分頁、Cmd/Ctrl+P 快速搜、右鍵選單整合、Canvas 拖放。結果是一級公民。 |
+| **LLM 生成摘要** | 本地 LLM 為筆記產生 frontmatter 描述，Embedding 基於摘要而非原文。長筆記相關性大幅提升。 |
+| **輕量級** | 8GB 筆電可用。推薦模型適合 MacBook M2。增量索引 + debounce 機制，日常幾乎無負擔。 |
 
-**Hot/Cold 智慧分層** — 有連結或近期活躍的筆記是 Hot。孤立的筆記是 Cold。「發掘」會浮出語意上與你目前思路相關的 Cold 筆記 — 你的盲區變得可見。
-
-**MOC 生成** — 一鍵把搜尋或發掘結果匯出成 Map of Content 筆記，帶有 wikilink 和內容預覽。你來決定結構；AI 只負責蒐集素材。
-
-**完全本地，真正隱私** — 所有 embedding、索引、搜尋、發掘都在你的電腦上完成。沒有資料離開你的機器。這不是一個開關選項，而是架構本身。
-
-**極簡且高效** — 側邊欄有「搜尋」和「發掘」兩個分頁。Cmd/Ctrl+P 快速搜尋。右鍵結果可用 Obsidian 原生選單（加書籤等）。直接拖拉結果到 Canvas 做視覺化。
-
-**專為中文優化** — 官方推薦 `qwen3-embedding:0.6b`，對繁體中文與英文的語意理解表現優秀。結合同義詞擴展，即使你用不同詞彙描述相同概念，也能找到想要的筆記。
-
-**LLM 自動生成描述** — 用本地 LLM 為筆記產生 description frontmatter，讓 embedding 不再只看原始內容，而是包含高品質摘要。搜尋和發掘的相關性都會明顯更好。
-
-**輕量，8GB 就能跑** — 設計極簡，記憶體與 CPU 佔用低。推薦模型在 MacBook M2 8GB 筆電上就可以使用。增量索引 + debounce 機制，日常使用幾乎感覺不到負擔。
-
-**高度彈性** — 除了 Ollama，也支援 LM Studio、llama.cpp、vLLM 等 OpenAI-compatible 伺服器。自由選擇最適合你的模型。
-
-> *「AI 幫你看見。你來決定它的意義。」*
-
-## Vault Search 的獨特之處
-
-Obsidian 生態內的語意搜尋外掛，通常做到「找到你想表達的意思」就停下來——一個更聰明的搜尋框。Vault Search 把搜尋當起點，不是終點。以下是差異所在：
-
-| 能力 | 為什麼有意義 |
-|---|---|
-| **Discover 分頁，不只是搜尋視窗** | 持續掛在側邊欄，隨著你閱讀和寫作不斷浮現相關筆記——不需要下指令、不需要輸入查詢、不打斷思緒。 |
-| **Hot / Cold 分級** | 每則筆記依連結數與最近活動自動分級。Cold（孤立）筆記會被推到你正在看的 Hot 筆記旁邊，把被遺忘的素材變成活的靈感庫。 |
-| **LLM 生成描述** | 本地 LLM 為每則筆記寫一段精煉的 frontmatter 描述，embedding 模型因此是在讀摘要而非整篇原文。長筆記的搜尋與 Discover 品質明顯提升。 |
-| **一鍵 MOC 生成** | 把任何搜尋或 Discover 結果轉成 Map of Content 筆記，含 wikilink 與預覽。適合研究、週回顧、寫作大綱。 |
-| **中文母語友善** | 針對 `qwen3-embedding` 調校，內建同義詞擴展、標題關鍵字加權、雙語 UI。繁中 + 英文混用開箱即用。 |
-| **乾淨的增量索引** | 索引存放在筆記庫之外——不會有 CSV 散落在 vault 根目錄。檔案變更會在背景自動重新索引。 |
-| **Canvas 與右鍵整合** | 拖曳結果到 Canvas 做視覺化整理；右鍵開啟 Obsidian 原生檔案選單（加書籤、重新命名、開啟位置）。搜尋結果是 Obsidian 的一等公民。 |
-| **完全本地、完全私有** | Embedding、索引、搜尋、描述生成全部跑在你自己的電腦上，透過 Ollama 或任何 OpenAI-compatible 伺服器。無雲端、無金鑰、無遙測。 |
-
-如果你只想要一個更好的搜尋框，市面上選擇不少。Vault Search 是給想讓筆記庫 *回話* 的人用的。
-
-## 功能
-
-### 搜尋
-- **語意搜尋** — 用模糊描述找到相關筆記，不只是關鍵字比對
-- **側邊欄面板** — 搜尋和發掘兩個分頁，結果固定不消失
-- **快速搜尋彈窗** — Cmd/Ctrl+P 快速跳轉
-- **尋找相似筆記** — 打開任一筆記，即時發現相關筆記（不需呼叫 API）
-- **智慧索引** — 增量更新，只重新 embed 變更的筆記
-- **Hot/Cold 分層** — Hot = 有連結/近期，Cold = 孤立/遺忘
-- **Chunking** — 可選的長文分段搜尋
-
-### 發掘 (v0.3.0)
-- **自動發掘** — 打開筆記時，側邊欄自動顯示相關筆記，Cold 筆記特別標示
-- **全域發掘** — 找出與你整體 Hot 筆記最相關的 Cold 筆記
-- **MOC 生成** — 搜尋或發掘結果一鍵匯出為 Map of Content 筆記
-- **Cold 搜尋範圍** — 專用的「僅 Cold」搜尋模式，刻意挖掘
-- **分層標記** — 視覺標記區分 Hot 和 Cold 結果
-- **Canvas 整合** — 拖拉結果到 Canvas 做視覺化排列
-- **右鍵選單** — 結果上右鍵可用 Obsidian 原生選單（加書籤等）
-
-### Description 生成
-- **LLM 描述** — 本地 LLM 生成 frontmatter 描述
-- **同義詞擴展** — 自訂同義詞提升搜尋召回率
-- **雙語介面** — 繁體中文與英文，自動偵測切換
-
-## 需求
-
-- [Ollama](https://ollama.com/) 已安裝並執行中
-- 已下載 embedding 模型（例如 `ollama pull qwen3-embedding:0.6b`）
-- 已下載 LLM 分析模型（例如 `ollama pull qwen3:1.7b`）（Description 生成選項）
-- Obsidian 桌面版
-
-## 安裝
-
-### BRAT（社群審核中，推薦此方式安裝）
-
-1. 安裝 [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
-2. 新增本 repo：`notoriouslab/vault-search`
-3. 在 Community plugins 啟用「Vault Search」
-
-### 手動安裝
-
-1. 從 [Releases](https://github.com/notoriouslab/vault-search/releases) 下載 `main.js`、`manifest.json`、`styles.css`
-2. 複製到 vault 的 `.obsidian/plugins/vault-search/`
-3. 在 Settings → Community plugins 啟用
-
-> **提醒：** 如果 vault 使用 Git 管理，建議在 `.gitignore` 加入 `.obsidian/plugins/*/data.json`，避免意外提交 API key 或個人設定。
+---
 
 ## 快速開始
 
-1. **Settings → Vault Search** → 選擇 Embedding 模型
-2. 按 **重建** 建立索引
-3. **Cmd/Ctrl+P → 「語意搜尋」** 或點左側羅盤 icon
-4. 切到**發掘**分頁，看看跟目前筆記相關的 Cold 筆記
+1. **安裝** — BRAT 或手動；見下方[安裝](#安裝與設定)
+2. **Settings → Vault Search** — 選擇 embedding 模型（預設：`qwen3-embedding:0.6b`）
+3. **按「重建」** — 建立完整索引
+4. **Cmd/Ctrl+P → 「語意搜尋」** 或開啟**發掘**分頁
 
 ### 推薦工作流
 
+最佳搜尋和發掘品質：
+
 ```
-1. 生成 Description  →  2. 重建索引  →  3. 搜尋與發掘
-   （LLM 彙整摘要）      （用 description embed）   （找到並重新發現）
+生成描述 → 重建索引 → 搜尋與發掘
+（LLM 彙整摘要） （用摘要 embed） （找到並重新發現）
 ```
 
-**為什麼順序重要？** Indexer 會優先使用 frontmatter `description` 來做 embedding。先生成 description 再建索引，搜尋和發掘的品質都更好。
+**快速設定：** 跳過描述，直接重建和搜尋。  
+**最佳品質：** 生成描述（預覽）→ 檢查 → 套用 → 重建。
 
-- **最簡模式**：跳過步驟 1，直接 Rebuild + 搜尋。
-- **最佳品質**：先跑「生成 description（預覽）」→ 看報告 → 「套用 description」→ 再「重建索引」。
+---
 
-### 發掘工作流
+## 核心功能
 
-發掘分頁有兩個模式：
+### 搜尋面板（側邊欄）
+- **語意搜尋** — 用模糊描述找筆記，不只是關鍵字
+- **搜尋和發掘分頁** — 持續結果，邊讀邊看
+- **Hot/Cold 標記** — 視覺區分有連結 vs 孤立筆記
+- **Chunking 模式** — 可選：長文分段搜尋
+- **相似度門檻** — 調整最低分數篩選結果（0–1）
 
-- **當前筆記** — 顯示跟你正在讀的筆記相關的所有筆記。Cold 筆記會特別標示 — 這些是你的盲區。
-- **全域** — 顯示跟你整個 Hot 池最相關的 Cold 筆記。大量匯入舊文章後，用這個找出被遺忘的好東西。
+### 發掘分頁
+- **自動模式** — 打開筆記 → 側邊欄自動顯示相關筆記（Cold 筆記特別標示）
+- **全域模式** — 找出與你整體 Hot 筆記最相關的 Cold 筆記
+- **MOC 匯出** — 一鍵把結果變成 Map of Content，帶 wikilink 和預覽
+- **Cold 搜尋** — 專用模式刻意探索孤立筆記
 
-按「生成 MOC」可以把結果匯出成帶連結的筆記。
+### 描述生成（LLM）
+- **自動摘要** — 本地 LLM 為每筆筆記寫 frontmatter 描述
+- **更好的 Embedding** — Embedding 模型用摘要而非原文
+- **品質提升** — 特別明顯在長、多主題筆記
+- **同義詞擴展** — 自訂同義詞提升搜尋召回率
 
-## 設定
+### 快速搜尋（Cmd/Ctrl+P）
+- **快速彈窗** — 鍵盤導航，快速跳轉
+- **Canvas 拖放** — 拖拉結果到 Canvas 做視覺化
+- **右鍵選單** — Obsidian 原生檔案操作（加書籤、重新命名等）
 
-<details>
-<summary><strong>搜尋與索引</strong></summary>
+---
+
+## 安裝與設定
+
+### 需求
+
+- [Obsidian](https://obsidian.md/) 桌面版
+- [Ollama](https://ollama.com/) 執行中（或任何 OpenAI-compatible 伺服器）
+- Embedding 模型 — `ollama pull qwen3-embedding:0.6b`（推薦）
+- LLM（選填）— `ollama pull qwen3:1.7b` 用於描述生成
+
+### 安裝外掛
+
+**BRAT（推薦，最快）：**
+1. 安裝 [BRAT](https://github.com/TfTHacker/obsidian42-brat)
+2. 新增 repo：`notoriouslab/vault-search`
+3. 在 Settings → Community plugins 啟用「Vault Search」
+
+**手動：**
+1. 從 [releases](https://github.com/notoriouslab/vault-search/releases) 下載 `main.js`、`manifest.json`、`styles.css`
+2. 複製到 `.obsidian/plugins/vault-search/`
+3. 在 Settings → Community plugins 啟用
+
+> **提示：** vault 若用 Git，加入 `.obsidian/plugins/*/data.json` 到 `.gitignore`。
+
+---
+
+## 進階參考
+
+### 設定
+
+**搜尋與索引：**
 
 | 設定 | 預設值 | 說明 |
 |---|---|---|
 | 伺服器網址 | `http://localhost:11434` | Ollama 或 OpenAI-compatible 伺服器 |
 | API 格式 | Ollama | Ollama 或 OpenAI-compatible |
 | API Key | — | 選填，用於需要認證的伺服器 |
-| Embedding 模型 | `qwen3-embedding:0.6b` | 用於生成向量的模型 |
+| Embedding 模型 | `qwen3-embedding:0.6b` | 向量 embedding 模型 |
 | 顯示筆數 | 10 | 搜尋和發掘結果上限 |
-| 最低分數 | 0.5 | 相似度門檻（0–1）。越低結果越多 |
-| 最大 Embed 字數 | 2000 | 每篇截取前 N 字。有 description 的優先用 description |
+| 最低分數 | 0.5 | 相似度門檻（0–1），越低結果越多 |
+| 最大 Embed 字數 | 2000 | 截取前 N 字；有 description 優先用 description |
 | Hot 天數 | 90 | 近 N 天建立的筆記視為 Hot |
 | 搜尋範圍 | 僅 Hot | Hot / 全部 / Cold |
 | Chunking 模式 | 關閉 | 關閉 / 智慧 / 全部 |
-| Chunk 大小 | 1000 | 每個 chunk 的字數 |
-| Chunk 重疊 | 200 | 相鄰 chunk 重疊的字數 |
-| 排除路徑 | `_templates/` `.trash/` `3_wiki/` | 不索引也不發掘的資料夾 |
+| Chunk 大小 | 1000 | 每個 chunk 字數 |
+| Chunk 重疊 | 200 | 相鄰 chunk 重疊字數 |
+| 排除路徑 | `_templates/` `.trash/` `3_wiki/` | 略過的資料夾 |
 | 同義詞 | — | 每行一組：`關鍵字 = 同義詞1, 同義詞2` |
-| 自動更新索引 | 開啟 | 檔案修改時自動重新 embed，保持發掘即時 |
+| 自動索引 | 開啟 | 檔案修改時自動更新 |
 
-</details>
-
-<details>
-<summary><strong>Description 生成器</strong></summary>
+**描述生成：**
 
 | 設定 | 預設值 | 說明 |
 |---|---|---|
-| LLM 模型 | `qwen3:1.7b` | 推薦：快速、品質好 |
-| 最短 description 字數 | 30 | 低於此字數重新生成。好的 description 提升搜尋和發掘準確度 |
+| LLM 模型 | `qwen3:1.7b` | **推薦** — 速度快、品質好 |
+| 最短字數 | 30 | 低於此字數重新生成 |
 
-</details>
+### 指令（Command Palette）
 
-## 指令
+所有指令前綴 **Vault Search:**
 
-所有指令都以 **Vault Search:** 為前綴，在 Command Palette（Cmd/Ctrl+P）中輸入即可。
+| 指令 | 用途 |
+|------|------|
+| **語意搜尋（彈窗）** | 快速搜尋，鍵盤導航 |
+| **開啟搜尋面板** | 側邊欄搜尋和發掘分頁 |
+| **尋找相似筆記** | 目前筆記的相關筆記 |
+| **發掘相關 Cold 筆記** | 全域發掘 — 找隱藏的好東西 |
+| **重建索引** | 全部重新建立索引 |
+| **更新索引** | 只處理新增或修改的筆記 |
+| **生成描述（預覽）** | LLM 草稿，預覽報告 |
+| **套用描述** | 寫入 frontmatter |
 
-| 指令 | 說明 |
-|---|---|
-| 語意搜尋（彈窗） | 快速搜尋，鍵盤導航 |
-| 開啟搜尋面板 | 側邊欄，搜尋與發掘分頁 |
-| 尋找相似筆記 | 目前筆記的相關筆記 |
-| 發掘相關的 Cold 筆記 | 全域發掘 — 找出隱藏的好東西 |
-| 重建索引 | 全部重新建立索引 |
-| 更新索引 | 只處理新增或修改的筆記 |
-| 生成 description（預覽） | LLM 生成描述，產出預覽報告 |
-| 套用 description | 將預覽結果寫入 frontmatter |
-
-## 運作原理
+### 運作原理
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────────┐
-│  筆記     │────▶│  Ollama  │────▶│  向量索引     │
-│  (.md)   │     │ Embed API│     │ (index.json) │
-└──────────┘     └──────────┘     └──────┬───────┘
-                                         │
-┌──────────┐     ┌──────────┐            │
-│  查詢     │────▶│  Ollama  │──── 餘弦相似度
-│          │     │ Embed API│            │
-└──────────┘     └──────────┘     ┌──────▼───────┐
-                                  │   搜尋結果    │
-                                  │  （排序）     │
-                                  └──────┬───────┘
-                                         │
-                            ┌────────────▼────────────┐
-                            │   發掘（不需 Ollama）     │
-                            │   純向量運算，用已有的     │
-                            │   embedding 找 Cold 筆記  │
-                            └─────────────────────────┘
+筆記 (.md)
+    ↓
+Ollama Embed API  ← [同義詞擴展]
+    ↓
+向量索引 (index.json)
+    ↓
+    ├─ 搜尋查詢 → 餘弦相似度 → 排序結果
+    ├─ 發掘 → 向量運算（無 API） → 浮出 Cold 筆記
+    └─ Hot/Cold 自動分類（連結+最近日期）
 ```
 
-1. **建立索引** — 筆記內容（或 description）→ embedding 模型 → 向量存在 `index.json`
-2. **搜尋** — 查詢（+ 同義詞擴展）→ 同一模型 → 餘弦相似度 → 排序顯示
-3. **發掘** — 不呼叫 API。用已有的 embedding 向量比對，浮出相關的 Cold 筆記
-4. **Hot/Cold** — 有連結/近期 = Hot。孤立 = Cold。發掘專門照亮你的盲區
-5. **MOC** — 匯出結果為 Map of Content 筆記，帶 wikilink 和內容預覽
-6. **Description** — 本地 LLM 彙整筆記 → 存入 frontmatter → 用於更好的 embedding
+**流程：**
+1. **索引** — 筆記（或描述）→ embedding 模型 → 向量儲存
+2. **搜尋** — 查詢 + 同義詞 → embedding → 餘弦相似度 → 結果
+3. **發掘** — 純向量運算，不呼叫 API
+4. **Hot/Cold** — 自動分類，發掘照亮你的盲區
+5. **MOC** — 匯出為帶 wikilink 的筆記
+6. **描述** — 本地 LLM → frontmatter → 更好的 embedding
 
-## 推薦模型
+### 模型推薦
 
-| 模型 | 大小 | 用途 | 備註 |
-|---|---|---|---|
-| `qwen3-embedding:0.6b` | 639MB | Embedding | 中英文最佳平衡 |
-| `nomic-embed-text` | 274MB | Embedding | 更輕量，英文為主 |
-| `qwen3:1.7b` | 1.4GB | LLM | 品質好，支援 2000+ 字 input |
-| `gemma3:1b` | 815MB | LLM | 更輕量，但 input 超過 500 字不穩定 |
+| 模型 | 大小 | 類型 | 備註 |
+|------|------|------|------|
+| `qwen3-embedding:0.6b` | 639 MB | Embedding | **推薦** — 中英文最佳 |
+| `nomic-embed-text` | 274 MB | Embedding | 更輕量，英文為主 |
+| `qwen3:1.7b` | 1.4 GB | LLM | **推薦** — 品質 + 速度 |
+| `gemma3:1b` | 815 MB | LLM | 更輕量，>500 字不穩定 |
 
-> 8GB RAM 的機器建議使用 `qwen3-embedding:0.6b` + `qwen3:1.7b` 的組合。
+**8GB RAM：** 用 `qwen3-embedding:0.6b` + `qwen3:1.7b` — 兩個都能裝得下。
+
+---
 
 ## 開發
 
@@ -245,6 +209,8 @@ npm install
 npm run dev    # watch mode
 npm run build  # production build
 ```
+
+---
 
 ## 授權
 
