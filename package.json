@@ -1,7 +1,7 @@
 {
-  "name": "vault-search",
+  "name": "vault-curate",
   "version": "0.4.0-beta.1",
-  "description": "Semantic search for your Obsidian vault using local embeddings",
+  "description": "High-quality Chinese-friendly semantic search for Obsidian, with optional AI curation.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
@@ -15,9 +15,13 @@
   "author": "Jacob Mei",
   "license": "MIT",
   "devDependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@types/node": "^22.0.0",
+    "@types/sql.js": "^1.4.11",
     "esbuild": "^0.25.0",
     "obsidian": "latest",
+    "onnxruntime-web": "^1.26.0",
+    "sql.js": "^1.14.1",
     "typescript": "^5.7.0"
   },
   "dependencies": {

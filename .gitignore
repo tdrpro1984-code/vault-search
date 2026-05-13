@@ -8,7 +8,9 @@ package-lock.json
 
 # Build output
 main.js
+worker.js
 *.js.map
+*.wasm
 
 # Dependencies
 node_modules/
@@ -19,3 +21,5 @@ data.json
 # Dev
 .hotreload
 .claude/
+.claude-memory
+opencode.json

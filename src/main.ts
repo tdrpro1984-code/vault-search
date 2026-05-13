@@ -134,7 +134,59 @@ export default class VaultSearchPlugin extends Plugin {
         // Settings tab
         this.addSettingTab(new VaultSearchSettingTab(this.app, this));
 
+        // ─── Phase 1 (004 rebrand) — Worker boot probe dev command ───
+        // Verifies that the bundled worker.js can be loaded + Web Worker boots
+        // in the Obsidian Electron renderer environment. Removed in Phase 3
+        // (Task 3.3) when real WasmEmbeddingProvider takes over worker comms.
+        this.addCommand({
+            id: "dev-worker-probe",
+            name: "[004 dev] Phase 1 worker boot probe",
+            callback: () => void this.dev004WorkerProbe(),
+        });
+
         console.debug("Vault Search loaded");
+    }
+
+    /** Phase 1 dogfood: load worker.js from plugin folder, spawn Web Worker, expect 'ready'. */
+    private async dev004WorkerProbe(): Promise<void> {
+        try {
+            const manifestDir = this.manifest.dir;
+            if (!manifestDir) {
+                new Notice("[004 probe] manifest.dir is undefined");
+                return;
+            }
+            const workerPath = normalizePath(`${manifestDir}/worker.js`);
+            const exists = await this.app.vault.adapter.exists(workerPath);
+            if (!exists) {
+                new Notice(`[004 probe] worker.js not found at ${workerPath}`);
+                return;
+            }
+            const workerSource = await this.app.vault.adapter.read(workerPath);
+            const blob = new Blob([workerSource], { type: "application/javascript" });
+            const url = URL.createObjectURL(blob);
+            const worker = new Worker(url);
+            const readyP = new Promise<string>((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("timeout after 5s")), 5000);
+                worker.onmessage = (e) => {
+                    clearTimeout(timer);
+                    resolve(JSON.stringify(e.data));
+                };
+                worker.onerror = (e) => {
+                    clearTimeout(timer);
+                    reject(new Error(e.message || "worker error"));
+                };
+            });
+            const msg = await readyP;
+            worker.terminate();
+            URL.revokeObjectURL(url);
+            new Notice(`[004 probe] ✅ Worker booted. First message: ${msg}`);
+            console.log("[004 probe] worker.js size:", workerSource.length, "bytes");
+            console.log("[004 probe] first message:", msg);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(`[004 probe] ❌ ${msg}`);
+            console.error("[004 probe]", err);
+        }
     }
 
     onunload() {

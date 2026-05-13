@@ -1,9 +1,9 @@
 {
-  "id": "vault-search",
-  "name": "Vault Search",
+  "id": "vault-curate",
+  "name": "Vault Curate",
   "version": "0.4.0-beta.1",
   "minAppVersion": "1.0.0",
-  "description": "Semantic search and discovery for your vault using local Ollama embeddings.",
+  "description": "High-quality Chinese-friendly semantic search for Obsidian, with optional AI curation.",
   "author": "Jacob Mei",
   "authorUrl": "https://github.com/notoriouslab",
   "isDesktopOnly": true
