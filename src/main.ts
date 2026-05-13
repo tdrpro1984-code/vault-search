@@ -1,5 +1,11 @@
-import { normalizePath, Notice, Plugin, TFile } from "obsidian";
+import { normalizePath, Notice, Plugin, TFile, requestUrl } from "obsidian";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
+import {
+    createProvider,
+    type EmbeddingProvider,
+    type HttpFetch,
+    type ProviderType,
+} from "./embedding";
 import {
     VaultSearchData,
     VaultSearchDataLegacy,
@@ -153,7 +159,132 @@ export default class VaultSearchPlugin extends Plugin {
             callback: () => void this.dev004SqliteProbe(),
         });
 
+        // ─── Phase 3 (004 rebrand) — Embedding provider probe (per type) ───
+        this.addCommand({
+            id: "dev-wasm-embed-probe",
+            name: "[004 dev] Phase 3 WASM embed probe (bge-base-zh q8)",
+            callback: () => void this.dev004EmbedProbe('wasm'),
+        });
+        this.addCommand({
+            id: "dev-ollama-embed-probe",
+            name: "[004 dev] Phase 3 Ollama embed probe",
+            callback: () => void this.dev004EmbedProbe('ollama'),
+        });
+        this.addCommand({
+            id: "dev-openai-embed-probe",
+            name: "[004 dev] Phase 3 OpenAI-compatible embed probe",
+            callback: () => void this.dev004EmbedProbe('openai-compatible'),
+        });
+
         console.debug("Vault Search loaded");
+    }
+
+    /**
+     * Phase 3 dogfood: instantiate one of the three providers, warmup, embed
+     * 3 Chinese sample texts + 1 English, verify dimension + ranking sanity.
+     */
+    private async dev004EmbedProbe(type: ProviderType): Promise<void> {
+        const log = (msg: string) => console.log(`[004 embed-probe ${type}]`, msg);
+        let provider: EmbeddingProvider | null = null;
+        try {
+            const httpFetch: HttpFetch = async (req) => {
+                const resp = await requestUrl({
+                    url: req.url,
+                    method: req.method,
+                    headers: req.headers,
+                    body: req.body,
+                    throw: false,
+                });
+                let parsedJson: unknown = null;
+                try { parsedJson = resp.json; } catch { /* may not be JSON */ }
+                return { status: resp.status, text: resp.text, json: parsedJson };
+            };
+
+            let workerSource = '';
+            if (type === 'wasm') {
+                const manifestDir = this.manifest.dir;
+                if (!manifestDir) throw new Error('manifest.dir undefined');
+                const workerPath = normalizePath(`${manifestDir}/worker.js`);
+                if (!(await this.app.vault.adapter.exists(workerPath))) {
+                    throw new Error(`worker.js not found at ${workerPath}`);
+                }
+                workerSource = await this.app.vault.adapter.read(workerPath);
+                log(`worker.js loaded (${workerSource.length} bytes)`);
+            }
+
+            const cfg = (() => {
+                if (type === 'wasm') {
+                    return {
+                        providerType: 'wasm' as const,
+                        wasmModelId: 'Xenova/bge-base-zh',
+                        wasmDtype: 'q8' as const,
+                    };
+                }
+                if (type === 'ollama') {
+                    const url = this.settings?.ollamaUrl || 'http://localhost:11434';
+                    const model = this.settings?.ollamaModel || 'bge-m3';
+                    return { providerType: 'ollama' as const, ollamaUrl: url, ollamaModel: model };
+                }
+                const url = this.settings?.ollamaUrl || 'http://localhost:11434';
+                const model = this.settings?.ollamaModel || 'text-embedding-3-small';
+                return {
+                    providerType: 'openai-compatible' as const,
+                    openaiUrl: url,
+                    openaiModel: model,
+                    apiKey: undefined,
+                };
+            })();
+
+            provider = createProvider(cfg, { workerSource, httpFetch });
+            log(`built provider: ${provider.displayName}`);
+
+            const startWarm = Date.now();
+            await provider.warmup((loaded, total, phase) => {
+                if (total > 0 && loaded === total) {
+                    log(`progress: ${phase ?? ''} complete (${total} bytes)`);
+                }
+            });
+            log(`warmup done in ${Date.now() - startWarm}ms, dim=${provider.dimension}, modelId=${provider.modelId}`);
+
+            const samples = [
+                '主公在 Obsidian 裡寫了關於 LLM 和 RAG 的筆記',
+                '靈修筆記：聖經中提到智慧的價值勝過珠寶',
+                'TypeScript Obsidian plugin development with esbuild bundler',
+            ];
+            const startEmbed = Date.now();
+            const vecs = await provider.embed(samples);
+            const embedMs = Date.now() - startEmbed;
+            log(`embed ${samples.length} texts in ${embedMs}ms (${(embedMs / samples.length).toFixed(0)}ms/text)`);
+            for (let i = 0; i < vecs.length; i++) {
+                if (vecs[i].length !== provider.dimension) {
+                    throw new Error(`vec[${i}].length = ${vecs[i].length}, expected ${provider.dimension}`);
+                }
+            }
+
+            // Ranking sanity: query 'Karpathy LLM' should match sample 0 best
+            const [qVec] = await provider.embed(['Karpathy 對 LLM 的看法']);
+            const cos = (a: Float32Array, b: Float32Array): number => {
+                let dot = 0, na = 0, nb = 0;
+                for (let i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+                return dot / (Math.sqrt(na) * Math.sqrt(nb));
+            };
+            const scored = vecs.map((v, idx) => ({ idx, sim: cos(qVec, v) }))
+                .sort((a, b) => b.sim - a.sim);
+            log(`ranking: ${JSON.stringify(scored.map(s => ({ idx: s.idx, sim: Number(s.sim.toFixed(3)) })))}`);
+            if (scored[0].idx !== 0) {
+                throw new Error(`expected sample 0 ('LLM RAG') to rank first, got idx ${scored[0].idx}`);
+            }
+
+            new Notice(
+                `[004 embed-probe ${type}] ✅ dim=${provider.dimension}, ${samples.length} embeds in ${embedMs}ms, ranking OK`,
+            );
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(`[004 embed-probe ${type}] ❌ ${msg}`);
+            console.error(`[004 embed-probe ${type}]`, err);
+        } finally {
+            provider?.dispose();
+        }
     }
 
     /**
