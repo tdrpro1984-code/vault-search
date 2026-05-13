@@ -217,6 +217,12 @@ export function toWikilink(path: string, title: string): string {
     return `[[${target}|${safeTitle}]]`;
 }
 
+/**
+ * @deprecated Phase 4 (004 rebrand) — superseded by `src/indexer/chunker.ts`.
+ * Kept only because searcher.ts / search-view.ts still depend on the v0.3.x
+ * `embedText` helper; remove together when Phase 5 rewires those callers to
+ * the EmbeddingProvider abstraction.
+ */
 export function splitChunks(text: string, size: number, overlap: number): string[] {
     if (text.length <= size) return [text];
     if (overlap >= size) overlap = 0;

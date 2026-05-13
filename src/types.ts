@@ -4,8 +4,19 @@
 
 export type ApiFormat = "ollama" | "openai";
 export type ChunkingMode = "off" | "smart" | "all";
+export type EmbeddingProviderType = "wasm" | "ollama" | "openai-compatible";
 
 export interface VaultSearchSettings {
+    /** Phase 4 (004 rebrand): which embedding backend to use.
+     *  - "wasm"              → built-in Xenova/bge-base-zh q8 (zero-config default)
+     *  - "ollama"            → external Ollama (advanced, higher quality)
+     *  - "openai-compatible" → external OpenAI-compatible endpoint
+     *  Phase 8 will expose this in the Settings UI.
+     */
+    embeddingProvider: EmbeddingProviderType;
+    /** Maximum characters embedded per note. Anything beyond this is dropped
+     *  before chunking, capping the worst-case per-note indexing cost. */
+    maxIndexableChars: number;
     ollamaUrl: string;
     ollamaModel: string;
     apiFormat: ApiFormat;
@@ -26,6 +37,8 @@ export interface VaultSearchSettings {
 }
 
 export const DEFAULT_SETTINGS: VaultSearchSettings = {
+    embeddingProvider: "wasm",
+    maxIndexableChars: 60000,
     ollamaUrl: "http://localhost:11434",
     ollamaModel: "qwen3-embedding:0.6b",
     apiFormat: "ollama" as ApiFormat,
@@ -41,8 +54,8 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     llmModel: "qwen3:1.7b",
     minDescLength: 30,
     chunkingMode: "off" as ChunkingMode,
-    chunkSize: 1000,
-    chunkOverlap: 200,
+    chunkSize: 2000,
+    chunkOverlap: 100,
 };
 
 export interface NoteEntry {

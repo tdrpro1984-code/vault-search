@@ -12,7 +12,7 @@ import type {
     ProviderType,
 } from './EmbeddingProvider';
 
-const EMBED_TIMEOUT_MS = 30_000;
+const EMBED_TIMEOUT_MS = 90_000;
 
 export type OllamaProviderConfig = {
     url: string;        // e.g. http://localhost:11434

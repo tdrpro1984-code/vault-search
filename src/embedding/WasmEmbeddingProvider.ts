@@ -22,7 +22,7 @@ type PendingEmbed = {
     reject: (err: Error) => void;
 };
 
-const EMBED_TIMEOUT_MS = 60_000;
+const EMBED_TIMEOUT_MS = 180_000;
 
 export class WasmEmbeddingProvider implements EmbeddingProvider {
     readonly providerType: ProviderType = 'wasm';

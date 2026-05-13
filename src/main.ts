@@ -3,6 +3,7 @@ import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import {
     createProvider,
     type EmbeddingProvider,
+    type EmbeddingSettings,
     type HttpFetch,
     type ProviderType,
 } from "./embedding";
@@ -23,14 +24,38 @@ import { t } from "./i18n";
 
 export default class VaultSearchPlugin extends Plugin {
     settings!: VaultSearchSettings;
+    /**
+     * v0.3.x in-memory index. Phase 4 (004 rebrand) replaces this with a
+     * SQLiteStore-backed pipeline; this field stays `null` until Phase 5
+     * rewires search/find-similar/discover to read from `store`. Existing
+     * `if (!this.plugin.index)` guards in search-view / searcher /
+     * description-generator / moc-generator will short-circuit safely.
+     */
     index: VaultSearchIndex | null = null;
     indexer!: Indexer;
     descGenerator!: DescriptionGenerator;
+    store: SQLiteStore | null = null;
+    provider: EmbeddingProvider | null = null;
     private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
     async onload() {
         await this.loadSettings();
-        this.indexer = new Indexer(this);
+
+        // Phase 4 (004 rebrand): open SQLite store + create embedding provider.
+        // Wrap in try/catch so a backend failure cannot prevent the plugin
+        // from registering its commands — diagnostics belong in the console,
+        // not a dead palette.
+        try {
+            this.store = await this.openStore();
+            this.provider = await this.buildProvider();
+            this.indexer = new Indexer(this, this.store, this.provider);
+        } catch (err) {
+            console.error("vault-curate: backend init failed", err);
+            new Notice(
+                `vault-curate: backend init failed — ${err instanceof Error ? err.message : String(err)}`,
+                10000,
+            );
+        }
         this.descGenerator = new DescriptionGenerator(this);
 
         // Register sidebar view
@@ -46,7 +71,7 @@ export default class VaultSearchPlugin extends Plugin {
             id: "semantic-search",
             name: t.cmdSemanticSearch,
             callback: () => {
-                if (!this.index || Object.keys(this.index.notes).length === 0) {
+                if (!this.store || !this.provider) {
                     new Notice(t.noticeIndexEmpty);
                     return;
                 }
@@ -124,19 +149,25 @@ export default class VaultSearchPlugin extends Plugin {
             })
         );
 
-        // Register vault events for auto-indexing
-        this.registerEvent(
-            this.app.vault.on("modify", (file) => this.onFileChange(file, "modify"))
-        );
-        this.registerEvent(
-            this.app.vault.on("create", (file) => this.onFileChange(file, "create"))
-        );
-        this.registerEvent(
-            this.app.vault.on("delete", (file) => this.onFileChange(file, "delete"))
-        );
-        this.registerEvent(
-            this.app.vault.on("rename", (file, oldPath) => this.onFileRename(file, oldPath))
-        );
+        // Register vault events for auto-indexing.
+        // Defer to `onLayoutReady` so we don't catch the synthetic `create`
+        // events that Obsidian emits for every existing file during workspace
+        // load — those would otherwise queue 300+ single-file index calls and
+        // saturate the embedding provider on plugin enable.
+        this.app.workspace.onLayoutReady(() => {
+            this.registerEvent(
+                this.app.vault.on("modify", (file) => this.onFileChange(file, "modify"))
+            );
+            this.registerEvent(
+                this.app.vault.on("create", (file) => this.onFileChange(file, "create"))
+            );
+            this.registerEvent(
+                this.app.vault.on("delete", (file) => this.onFileChange(file, "delete"))
+            );
+            this.registerEvent(
+                this.app.vault.on("rename", (file, oldPath) => this.onFileRename(file, oldPath))
+            );
+        });
 
         // Settings tab
         this.addSettingTab(new VaultSearchSettingTab(this.app, this));
@@ -174,6 +205,16 @@ export default class VaultSearchPlugin extends Plugin {
             id: "dev-openai-embed-probe",
             name: "[004 dev] Phase 3 OpenAI-compatible embed probe",
             callback: () => void this.dev004EmbedProbe('openai-compatible'),
+        });
+
+        // ─── Phase 4 (004 rebrand) — Indexer pipeline probe dev command ───
+        // Runs a partial scan (first N files) end-to-end through the new
+        // SQLite-backed Indexer so we can verify the full pipeline before
+        // committing the user to a 334-note rebuild.
+        this.addCommand({
+            id: "dev-index-probe",
+            name: "[004 dev] Phase 4 indexer probe (first 5 files)",
+            callback: () => void this.dev004IndexProbe(),
         });
 
         console.debug("Vault Search loaded");
@@ -448,6 +489,10 @@ export default class VaultSearchPlugin extends Plugin {
             clearTimeout(timer);
         }
         if (this.activeDiscoverTimer) clearTimeout(this.activeDiscoverTimer);
+        // Best-effort flush + dispose. We cannot await in onunload, but
+        // SQLiteStore.dispose() flushes synchronously when pending mutations.
+        void this.store?.dispose();
+        this.provider?.dispose();
         console.debug("Vault Search unloaded");
     }
 
@@ -552,31 +597,43 @@ export default class VaultSearchPlugin extends Plugin {
     }
 
     async rebuildIndex() {
+        if (!this.indexer) {
+            new Notice("vault-curate: backend not ready — see console for init error");
+            return;
+        }
         if (this.indexer.indexing) { new Notice(t.indexingInProgress); return; }
         this.indexer.indexing = true;
         try {
             await this.indexer.rebuild();
-            await this.saveIndex();
         } finally {
             this.indexer.indexing = false;
         }
     }
 
     async updateIndex() {
+        if (!this.indexer) {
+            new Notice("vault-curate: backend not ready — see console for init error");
+            return;
+        }
         if (this.indexer.indexing) { new Notice(t.indexingInProgress); return; }
         this.indexer.indexing = true;
         try {
             await this.indexer.update();
-            await this.saveIndex();
         } finally {
             this.indexer.indexing = false;
         }
     }
 
     private onFileChange(file: unknown, type: string) {
-        if (!this.settings.autoIndex || this.migrating || this.indexer.indexing) return;
+        if (!this.indexer || !this.store) return;
+        if (!this.settings.autoIndex || this.indexer.indexing) return;
         if (!(file instanceof TFile) || file.extension !== "md") return;
         if (this.indexer.shouldExclude(file.path)) return;
+        // Skip startup `create` storm: Obsidian re-emits a create event for
+        // every existing file when a plugin enables. Only honour incremental
+        // events after the user has explicitly run a full rebuild at least
+        // once (signalled by meta.last_indexed_at).
+        if (!this.store.getMeta("last_indexed_at")) return;
 
         const existing = this.debounceTimers.get(file.path);
         if (existing) clearTimeout(existing);
@@ -586,70 +643,223 @@ export default class VaultSearchPlugin extends Plugin {
             setTimeout(() => {
                 this.debounceTimers.delete(file.path);
                 if (type === "delete") {
-                    this.indexer.removeFromIndex(file.path);
-                    void this.saveIndex();
+                    this.indexer.removeNote(file.path);
                 } else {
-                    void this.indexer.indexSingleFile(file).then(() => this.saveIndex());
+                    void this.indexer.indexSingleFile(file);
                 }
             }, 2000)
         );
     }
 
     private async onFileRename(file: unknown, oldPath: string) {
-        if (!this.settings.autoIndex) return;
+        if (!this.indexer || !this.store || !this.settings.autoIndex) return;
         if (!(file instanceof TFile) || file.extension !== "md") return;
+        if (!this.store.getMeta("last_indexed_at")) return;
 
-        this.indexer.renameInIndex(oldPath, file.path);
-        await this.saveIndex();
+        await this.indexer.renameNote(oldPath, file.path, file);
     }
 
-    private migrating = false;
-
-    private indexPath(): string {
+    /** DB path inside the plugin folder. */
+    private dbPath(): string {
         return normalizePath(
+            `${this.app.vault.configDir}/plugins/${this.manifest.id}/index.sqlite`
+        );
+    }
+
+    /** Drop legacy v0.3.x index.json file once the SQLite store is healthy. */
+    private async dropLegacyIndexJson(): Promise<void> {
+        const legacy = normalizePath(
             `${this.app.vault.configDir}/plugins/${this.manifest.id}/index.json`
         );
+        try {
+            if (await this.app.vault.adapter.exists(legacy)) {
+                await this.app.vault.adapter.remove(legacy);
+                console.debug("vault-curate: removed legacy index.json");
+            }
+        } catch (err) {
+            console.warn("vault-curate: failed to remove legacy index.json", err);
+        }
+    }
+
+    private async openStore(): Promise<SQLiteStore> {
+        const adapter: PersistAdapter = {
+            read: async (path) => {
+                const exists = await this.app.vault.adapter.exists(path);
+                if (!exists) return null;
+                const buf = await this.app.vault.adapter.readBinary(path);
+                return new Uint8Array(buf);
+            },
+            write: async (path, bytes) => {
+                const ab = bytes.buffer.slice(
+                    bytes.byteOffset,
+                    bytes.byteOffset + bytes.byteLength,
+                ) as ArrayBuffer;
+                await this.app.vault.adapter.writeBinary(path, ab);
+            },
+            exists: (path) => this.app.vault.adapter.exists(path),
+        };
+        const store = await SQLiteStore.open(adapter, this.dbPath());
+        await this.dropLegacyIndexJson();
+        return store;
+    }
+
+    /**
+     * Build the embedding provider from current settings.
+     *
+     * Provider selection (Phase 4 wires the WASM default; Phase 8 Settings UI
+     * will expose a first-class picker):
+     *   - "wasm"              → built-in transformers.js (default, zero-config)
+     *   - "ollama"            → external Ollama
+     *   - "openai-compatible" → external OpenAI-compatible endpoint
+     */
+    private async buildProvider(): Promise<EmbeddingProvider> {
+        const httpFetch: HttpFetch = async (req) => {
+            const resp = await requestUrl({
+                url: req.url,
+                method: req.method,
+                headers: req.headers,
+                body: req.body,
+                throw: false,
+            });
+            let parsedJson: unknown = null;
+            try { parsedJson = resp.json; } catch { /* may not be JSON */ }
+            return { status: resp.status, text: resp.text, json: parsedJson };
+        };
+
+        const providerType = this.settings.embeddingProvider;
+        if (providerType === "wasm") {
+            const workerSource = await this.readWorkerSource();
+            return createProvider(
+                {
+                    providerType: "wasm",
+                    // Phase 4 dogfood: bge-base-zh (110M params) takes ~6s/chunk
+                    // in Obsidian's Electron worker (wasm only, no native ORT).
+                    // Switched to bge-small-zh-v1.5 (33M params) to land in the
+                    // same speed class as competitor MiniLM-L12 while keeping
+                    // Chinese embedding quality far above the multilingual MiniLM.
+                    wasmModelId: "Xenova/bge-small-zh-v1.5",
+                    wasmDtype: "q8",
+                },
+                { workerSource },
+            );
+        }
+
+        const cfg: EmbeddingSettings = providerType === "openai-compatible"
+            ? {
+                providerType: "openai-compatible",
+                openaiUrl: this.settings.ollamaUrl,
+                openaiModel: this.settings.ollamaModel,
+                apiKey: this.settings.apiKey || undefined,
+            }
+            : {
+                providerType: "ollama",
+                ollamaUrl: this.settings.ollamaUrl,
+                ollamaModel: this.settings.ollamaModel,
+                apiKey: this.settings.apiKey || undefined,
+            };
+
+        return createProvider(cfg, { httpFetch });
+    }
+
+    private async readWorkerSource(): Promise<string> {
+        const manifestDir = this.manifest.dir;
+        if (!manifestDir) throw new Error("WASM provider: manifest.dir is undefined");
+        const workerPath = normalizePath(`${manifestDir}/worker.js`);
+        if (!(await this.app.vault.adapter.exists(workerPath))) {
+            throw new Error(`WASM provider: worker.js not found at ${workerPath}`);
+        }
+        return this.app.vault.adapter.read(workerPath);
+    }
+
+    /** Tear down old provider/store, build new from current settings. Used after Settings save. */
+    async reloadBackends(): Promise<void> {
+        const oldProvider = this.provider;
+        const newProvider = await this.buildProvider();
+        this.provider = newProvider;
+        if (this.store) {
+            this.indexer.setBackends(this.store, newProvider);
+        }
+        oldProvider?.dispose();
+    }
+
+    /** Phase 4 dogfood: index first 5 markdown files end-to-end via new pipeline. */
+    private async dev004IndexProbe(): Promise<void> {
+        const log = (msg: string) => console.log("[004 index-probe]", msg);
+        try {
+            if (!this.store || !this.provider) {
+                throw new Error("store or provider not initialised");
+            }
+            const files = this.app.vault.getMarkdownFiles()
+                .filter(f => !this.indexer.shouldExclude(f.path))
+                .slice(0, 5);
+            if (files.length === 0) {
+                throw new Error("no markdown files found");
+            }
+            log(`will index ${files.length} files via ${this.provider.displayName}`);
+            const t0 = Date.now();
+            await this.provider.warmup();
+            log(`provider ready in ${Date.now() - t0}ms, dim=${this.provider.dimension}`);
+
+            for (const f of files) {
+                const t1 = Date.now();
+                await this.indexer.indexSingleFile(f);
+                log(`  indexed ${f.path} in ${Date.now() - t1}ms`);
+            }
+
+            const notes = this.store.getAllBodyVecs();
+            const titles = this.store.getAllTitles();
+            log(`store now has ${notes.size} notes, ${titles.size} titles`);
+
+            // Validate first body_vec dimension
+            const firstPath = files[0].path;
+            const sample = this.store.getNote(firstPath);
+            if (!sample) throw new Error(`getNote(${firstPath}) returned null`);
+            if (sample.bodyVec.length !== this.provider.dimension) {
+                throw new Error(
+                    `bodyVec.length ${sample.bodyVec.length} != provider.dimension ${this.provider.dimension}`,
+                );
+            }
+            log(`sample note: ${sample.title} | tier=${sample.tier} | bodyDim=${sample.bodyDim} | chunks_meta=${this.store.getChunks(firstPath).length}`);
+
+            const meta = {
+                provider: this.store.getMeta("embedding_provider"),
+                modelId: this.store.getMeta("embedding_model_id"),
+                dim: this.store.getMeta("embedding_dim"),
+                lastIndexedAt: this.store.getMeta("last_indexed_at"),
+            };
+            log(`meta: ${JSON.stringify(meta)}`);
+
+            await this.store.flush();
+            new Notice(
+                `[004 index-probe] ✅ ${notes.size} notes, dim=${sample.bodyDim}, model=${meta.modelId}`,
+            );
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(`[004 index-probe] ❌ ${msg}`);
+            console.error("[004 index-probe]", err);
+        }
     }
 
     async loadSettings() {
         const data = await this.loadData() as Partial<VaultSearchDataLegacy> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings);
 
-        // Migration: v0.2.0 stored index in data.json, v0.3.0 uses index.json
-        if (data?.index) {
-            this.migrating = true;
-            this.index = data.index;
-            await this.saveIndex();
-            await this.saveData({ settings: this.settings } as VaultSearchData);
-            this.migrating = false;
-        } else {
-            this.index = await this.loadIndex();
+        // Phase 4 (004 rebrand) chunk tuning migration: v0.3 default 1000/200
+        // is too small for bge-small-zh WASM throughput in Obsidian's Electron
+        // worker. Force-upgrade users still on the old default.
+        if (this.settings.chunkSize === 1000 && this.settings.chunkOverlap === 200) {
+            this.settings.chunkSize = 2000;
+            this.settings.chunkOverlap = 100;
         }
-    }
 
-    private async loadIndex(): Promise<VaultSearchIndex | null> {
-        try {
-            const raw = await this.app.vault.adapter.read(this.indexPath());
-            return JSON.parse(raw) as VaultSearchIndex;
-        } catch (e) {
-            // File not found is normal (first run), parse error is not
-            if (await this.app.vault.adapter.exists(this.indexPath())) {
-                console.error("Vault Search: Failed to parse index.json", e);
-                new Notice(t.noticeIndexCorrupt);
-            }
-            return null;
-        }
+        // v0.3.x stored either {settings, index} (v0.2.0) or {settings} (v0.3.0+).
+        // Phase 4 (004 rebrand) ignores any embedded `index` field — index.json
+        // (and any legacy data.json index) are abandoned in favour of SQLite.
+        // dropLegacyIndexJson runs after openStore() to clean the old file.
+        await this.saveData({ settings: this.settings } as VaultSearchData);
     }
 
     async saveSettings() {
         await this.saveData({ settings: this.settings } as VaultSearchData);
-    }
-
-    async saveIndex() {
-        if (!this.index) return;
-        await this.app.vault.adapter.write(
-            this.indexPath(),
-            JSON.stringify(this.index)
-        );
     }
 }

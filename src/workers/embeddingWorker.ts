@@ -78,12 +78,30 @@ async function handleInit(msg: InitMsg): Promise<void> {
         // Optional override; default points at huggingface.co
         (tfm.env as unknown as { remoteHost: string }).remoteHost = msg.remoteUrl;
     }
+
+    // Match erayaydn0/obsidian-vault-search 0.1.0 worker init exactly: only
+    // set proxy=false + numThreads=1 and let the ORT wasm bundle wire up
+    // its own module/binary pair. Letting transformers.js pre-load via
+    // useWasmCache or forcing our own wasmBinary triggers the "no available
+    // backend; Failed to resolve module specifier 'worker_threads'" error
+    // in Obsidian's Electron renderer (no crossOriginIsolated → SAB
+    // unavailable → ort's multi-thread fallback ends up requiring node's
+    // worker_threads module). This combination works on @huggingface/transformers
+    // ^4.0.1 with the ort version pulled in transitively.
+    const ortWasm = (tfm.env as unknown as {
+        backends?: { onnx?: { wasm?: { proxy?: boolean; numThreads?: number } } };
+    }).backends?.onnx?.wasm;
+    if (ortWasm) {
+        ortWasm.proxy = false;
+        ortWasm.numThreads = 1;
+    }
     // Caching: transformers.js default uses browser cache (IndexedDB via Cache API
     // wrapper). In Electron renderer this works out of the box.
     const pipeline = tfm.pipeline;
     const dtype = msg.dtype ?? 'q8';
 
     const built = await pipeline('feature-extraction', msg.modelId, {
+        device: 'wasm',
         dtype,
         progress_callback: (p: unknown) => {
             const pe = p as { status?: string; loaded?: number; total?: number; file?: string };

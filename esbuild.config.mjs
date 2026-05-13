@@ -105,6 +105,14 @@ await esbuild.build({
     // Use transformers.web build in the worker (browser context).
     '@huggingface/transformers':
       './node_modules/@huggingface/transformers/dist/transformers.web.js',
+    // Force transformers.web's `import 'onnxruntime-web'` onto the SIMD-threaded
+    // wasm bundle. Empirically this is ~2x faster than the default entry
+    // (~6000ms/chunk → ~3000ms/chunk for bge-base in Obsidian's Electron
+    // worker). The `worker_threads` resolution error we hit earlier was
+    // triggered by injecting wasmBinary + useWasmCache=false in the worker —
+    // NOT by this alias. Keep the alias, drop the plumbing.
+    'onnxruntime-web':
+      './node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs',
     'onnxruntime-web/webgpu':
       './node_modules/onnxruntime-web/dist/ort.wasm.bundle.min.mjs',
   },

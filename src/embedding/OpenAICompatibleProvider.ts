@@ -9,7 +9,7 @@ import type {
     ProviderType,
 } from './EmbeddingProvider';
 
-const EMBED_TIMEOUT_MS = 30_000;
+const EMBED_TIMEOUT_MS = 90_000;
 
 export type OpenAICompatibleConfig = {
     url: string;        // e.g. https://api.openai.com or http://localhost:8080

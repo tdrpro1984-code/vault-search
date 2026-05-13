@@ -77,6 +77,11 @@ export class SQLiteStore {
         private readonly dbPath: string,
     ) {}
 
+    /** True once dispose() has been called. Mutation methods become no-ops. */
+    get isDisposed(): boolean {
+        return this.disposed;
+    }
+
     /** Factory: open existing db file or create fresh, apply schema. */
     static async open(adapter: PersistAdapter, dbPath: string): Promise<SQLiteStore> {
         const store = new SQLiteStore(adapter, dbPath);
@@ -90,6 +95,7 @@ export class SQLiteStore {
     // ─── Notes ────────────────────────────────────────────────────────────────
 
     upsertNote(note: NoteRecord): void {
+        if (this.disposed) return;
         this.db.run(
             `INSERT OR REPLACE INTO notes
              (path, mtime, title, description, tier, body_vec, body_dim, indexed_at)
@@ -129,6 +135,7 @@ export class SQLiteStore {
     }
 
     deleteNote(path: string): void {
+        if (this.disposed) return;
         // chunks cascade automatically via ON DELETE CASCADE.
         this.db.run('DELETE FROM notes WHERE path = ?', [path]);
         this.touch();
@@ -137,6 +144,7 @@ export class SQLiteStore {
     // ─── Chunks ───────────────────────────────────────────────────────────────
 
     upsertChunks(notePath: string, chunks: ChunkRecord[]): void {
+        if (this.disposed) return;
         // Replace strategy: delete existing chunks for this note, insert new.
         this.db.run('DELETE FROM chunks WHERE note_path = ?', [notePath]);
         const insertChunk = this.db.prepare(
@@ -249,6 +257,7 @@ export class SQLiteStore {
     }
 
     setMeta(key: string, value: string): void {
+        if (this.disposed) return;
         this.db.run('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', [key, value]);
         this.touch();
     }
@@ -257,6 +266,7 @@ export class SQLiteStore {
 
     /** Provider switch: clear all indexed data but preserve schema + meta.schema_version. */
     clearAllData(): void {
+        if (this.disposed) return;
         this.db.exec(`
             DELETE FROM chunks;
             DELETE FROM notes;
