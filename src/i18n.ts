@@ -65,6 +65,8 @@ export interface Locale {
     cmdDescActive: string;
     cmdDescSelected: string;
     menuDescGenerate: string;
+    menuFindSimilar: string;
+    btnDescGenerate: string;
     ollamaNotReady: string;
     noSimilar: string;
     notIndexed: string;
@@ -103,8 +105,35 @@ export interface Locale {
     cmdGlobalDiscover: string;
     scopeCold: string;
     // Settings sections
-    sectionSearch: string;
+    sectionQuickSetup: string;
     sectionAICuration: string;
+    sectionAdvanced: string;
+    embeddingProvider: string;
+    embeddingProviderDesc: string;
+    embeddingProviderBuiltin: string;
+    embeddingProviderOllama: string;
+    embeddingProviderOpenAI: string;
+    builtinModelNote: string;
+    providerSwitchTitle: string;
+    providerSwitchBody: (notes: number) => string;
+    providerSwitchConfirm: string;
+    providerSwitchCancel: string;
+    onboardingTitle: string;
+    onboardingIntro: string;
+    onboardingProviderHeading: string;
+    onboardingOllamaDetected: string;
+    onboardingOllamaNotDetected: string;
+    onboardingOpenaiEndpoint: string;
+    onboardingOpenaiModel: string;
+    onboardingTestConnection: string;
+    onboardingTestOk: string;
+    onboardingTestFail: string;
+    onboardingAIHeading: string;
+    onboardingAIYes: string;
+    onboardingAINo: string;
+    onboardingAIRequiresLlm: string;
+    onboardingIndexNow: string;
+    onboardingLater: string;
     // Notices
     noticeIndexEmpty: string;
     noticeIndexing: (done: number, total: number) => string;
@@ -206,7 +235,9 @@ const en: Locale = {
     cmdUpdate: "Update index",
     cmdDescActive: "Generate description for active note",
     cmdDescSelected: "Generate descriptions for current results",
-    menuDescGenerate: "Generate description",
+    menuDescGenerate: "VC: Generate description",
+    menuFindSimilar: "VC: Find similar notes",
+    btnDescGenerate: "Generate description",
     ollamaNotReady: "Cannot connect to Ollama. Please ensure Ollama is running.",
     noSimilar: "No similar notes found",
     notIndexed: "This note is not indexed",
@@ -245,8 +276,36 @@ const en: Locale = {
     mocNoResults: "No results to generate MOC from",
     cmdGlobalDiscover: "Discover related Cold notes",
     scopeCold: "Cold only",
-    sectionSearch: "Search & index",
+    sectionQuickSetup: "Quick setup",
     sectionAICuration: "AI curation",
+    sectionAdvanced: "Advanced",
+    embeddingProvider: "Embedding provider",
+    embeddingProviderDesc: "Where embeddings are computed.\n• Built-in: entirely on-device, never leaves your machine.\n• Ollama: a local daemon you run on 127.0.0.1 — also stays on your machine.\n• OpenAI-compatible: any compatible endpoint, could be local (LM Studio / llama.cpp) OR a remote API (OpenAI etc.) — note content may leave your machine.",
+    embeddingProviderBuiltin: "Built-in (on-device, WebGPU)",
+    embeddingProviderOllama: "Ollama (local daemon)",
+    embeddingProviderOpenAI: "OpenAI-compatible API (local or remote)",
+    builtinModelNote: "Model: bge-small-zh-v1.5 (~33M params, ~110MB download on first run). WebGPU accelerated.",
+    providerSwitchTitle: "Switch embedding provider?",
+    providerSwitchBody: (notes) =>
+        `This clears the existing index and re-indexes the whole vault. About ${notes} notes will be re-embedded — estimated 1–10 minutes depending on provider.`,
+    providerSwitchConfirm: "Confirm and re-index",
+    providerSwitchCancel: "Cancel",
+    onboardingTitle: "Welcome to Vault Curate",
+    onboardingIntro: "Vault Curate brings high-quality Chinese-friendly semantic search to your vault. Pick where embeddings run.",
+    onboardingProviderHeading: "Embedding provider",
+    onboardingOllamaDetected: "✓ Ollama detected on localhost:11434",
+    onboardingOllamaNotDetected: "⚠ Ollama not running. Install from ollama.com, then reopen this dialog.",
+    onboardingOpenaiEndpoint: "Endpoint URL",
+    onboardingOpenaiModel: "Model name",
+    onboardingTestConnection: "Test connection",
+    onboardingTestOk: "✓ Reachable",
+    onboardingTestFail: "✗ Not reachable",
+    onboardingAIHeading: "Enable AI curation?",
+    onboardingAIYes: "Yes — description + topic-grouped MOC",
+    onboardingAINo: "No, just search",
+    onboardingAIRequiresLlm: "AI curation needs an Ollama or OpenAI-compatible LLM endpoint.",
+    onboardingIndexNow: "Index my vault now",
+    onboardingLater: "Skip for now",
     noticeIndexEmpty: "Vault Search: Index is empty. Run 'Rebuild index' first",
     noticeIndexing: (done, total) => `Vault Search: Indexing ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
@@ -371,7 +430,9 @@ const zhTW: Locale = {
     cmdUpdate: "更新索引",
     cmdDescActive: "為當前筆記生成 description",
     cmdDescSelected: "為目前結果生成 description",
-    menuDescGenerate: "生成 description",
+    menuDescGenerate: "VC: 生成 description",
+    menuFindSimilar: "VC: 尋找相似筆記",
+    btnDescGenerate: "生成 description",
     ollamaNotReady: "無法連線 Ollama，請確認 Ollama 已啟動",
     noSimilar: "找不到相似筆記",
     notIndexed: "此筆記尚未索引",
@@ -410,8 +471,36 @@ const zhTW: Locale = {
     mocNoResults: "沒有結果可生成 MOC",
     cmdGlobalDiscover: "發掘相關的 Cold 筆記",
     scopeCold: "僅 Cold",
-    sectionSearch: "搜尋與索引",
+    sectionQuickSetup: "快速設定",
     sectionAICuration: "AI 整理",
+    sectionAdvanced: "進階",
+    embeddingProvider: "Embedding 提供者",
+    embeddingProviderDesc: "Embedding 在哪裡計算。\n• 內建：完全在裝置上跑，內容不出網路。\n• Ollama：本機跑的 daemon（127.0.0.1）—— 同樣不出網路。\n• OpenAI-compatible：相容 endpoint，可能是本機（LM Studio、llama.cpp 等）也可能是遠端 API（OpenAI 等）—— 筆記內容可能被送到外部伺服器。",
+    embeddingProviderBuiltin: "內建（裝置端、WebGPU）",
+    embeddingProviderOllama: "Ollama（本機 daemon）",
+    embeddingProviderOpenAI: "OpenAI-compatible API（本機或遠端）",
+    builtinModelNote: "模型：bge-small-zh-v1.5（~33M 參數，首次執行下載 ~110MB），WebGPU 加速。",
+    providerSwitchTitle: "切換 Embedding 提供者？",
+    providerSwitchBody: (notes) =>
+        `這會清空現有索引並重新索引整個 vault。約 ${notes} 篇筆記需重新 embed，預估 1–10 分鐘（視提供者而定）。`,
+    providerSwitchConfirm: "確認並重新索引",
+    providerSwitchCancel: "取消",
+    onboardingTitle: "歡迎使用 Vault Curate",
+    onboardingIntro: "Vault Curate 為 Obsidian 提供高品質的中文語意搜尋。請選擇 embedding 運行位置。",
+    onboardingProviderHeading: "Embedding 提供者",
+    onboardingOllamaDetected: "✓ 偵測到 Ollama（localhost:11434）",
+    onboardingOllamaNotDetected: "⚠ 未偵測到 Ollama。請從 ollama.com 安裝後重開此視窗。",
+    onboardingOpenaiEndpoint: "Endpoint URL",
+    onboardingOpenaiModel: "模型名稱",
+    onboardingTestConnection: "測試連線",
+    onboardingTestOk: "✓ 可連線",
+    onboardingTestFail: "✗ 無法連線",
+    onboardingAIHeading: "啟用 AI 整理？",
+    onboardingAIYes: "啟用 — Description 生成與主題分群 MOC",
+    onboardingAINo: "不用，純搜尋",
+    onboardingAIRequiresLlm: "AI 整理需要 Ollama 或 OpenAI-compatible LLM endpoint。",
+    onboardingIndexNow: "現在開始建立索引",
+    onboardingLater: "稍後再說",
     noticeIndexEmpty: "Vault Search：索引為空，請先執行「重建索引」",
     noticeIndexing: (done, total) => `Vault Search：索引中 ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {

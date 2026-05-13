@@ -11,8 +11,9 @@ declare module "obsidian" {
 }
 import type VaultSearchPlugin from "./main";
 import { SearchResult } from "./types";
-import { checkOllama, discoverForNote, embedText, formatLocalDateTime, getContentPreview, globalDiscover, rankNotes, renderResultItem, toWikilink } from "./utils";
+import { formatLocalDateTime, getContentPreview, renderResultItem, toWikilink } from "./utils";
 import { searchHybrid } from "./search/searchHybrid";
+import { discoverForNoteSqlite, globalDiscoverSqlite } from "./search/discoverSqlite";
 import { classifyMocSize } from "./clustering";
 import { FallbackToFlatError, generateMocGrouped, NoteForMoc, renderMocGrouped } from "./moc-generator";
 import { t } from "./i18n";
@@ -255,30 +256,34 @@ export class SearchView extends ItemView {
     }
 
     discoverForFile(file: TFile) {
-        if (!this.plugin.index) {
+        const store = this.plugin.store;
+        if (!store) {
             this.discoverStatusEl.setText(t.discoverNoIndex);
             this.discoverResultsEl.empty();
             return;
         }
-
-        const entry = this.plugin.index.notes[file.path];
-        if (!entry) {
+        const note = store.getNote(file.path);
+        if (!note) {
             this.discoverStatusEl.setText(t.notIndexed);
             this.discoverResultsEl.empty();
             return;
         }
 
-        const results = discoverForNote(file.path, this.plugin.index, this.plugin.settings);
+        const results = discoverForNoteSqlite(file.path, store, {
+            minScore: this.plugin.settings.minScore,
+            topResults: this.plugin.settings.topResults,
+        });
         this.discoverStatusEl.setText(
             results.length > 0
-                ? t.discoverRelatedTo(entry.title)
-                : t.discoverEmpty
+                ? t.discoverRelatedTo(note.title)
+                : t.discoverEmpty,
         );
         this.renderDiscoverResults(results);
     }
 
     private async runGlobalDiscover() {
-        if (!this.plugin.index) {
+        const store = this.plugin.store;
+        if (!store) {
             this.discoverStatusEl.setText(t.discoverNoIndex);
             this.discoverResultsEl.empty();
             return;
@@ -288,10 +293,12 @@ export class SearchView extends ItemView {
         this.discoverStatusEl.setText(t.discoverComputing);
         this.discoverResultsEl.empty();
 
-        const results = await globalDiscover(
-            this.plugin.index,
-            this.plugin.settings.topResults,
-            this.plugin.settings.minScore,
+        const results = await globalDiscoverSqlite(
+            store,
+            {
+                minScore: this.plugin.settings.minScore,
+                topResults: this.plugin.settings.topResults,
+            },
             (done, total) => {
                 if (!this.globalCancelled.value) {
                     this.discoverStatusEl.setText(t.discoverProgress(done, total));
@@ -305,7 +312,7 @@ export class SearchView extends ItemView {
         this.discoverStatusEl.setText(
             results.length > 0
                 ? t.discoverGlobalDesc
-                : t.discoverGlobalEmpty
+                : t.discoverGlobalEmpty,
         );
         this.renderDiscoverResults(results);
     }
@@ -617,7 +624,7 @@ export class SearchView extends ItemView {
         if (typeof desc === "string" && desc.trim().length > 0) return;
 
         const btn = item.createEl("button", {
-            text: t.menuDescGenerate,
+            text: t.btnDescGenerate,
             cls: "vault-search-desc-btn",
         });
         btn.addEventListener("click", async (e) => {
@@ -629,7 +636,7 @@ export class SearchView extends ItemView {
                 btn.remove();
             } else {
                 btn.removeAttribute("disabled");
-                btn.setText(t.menuDescGenerate);
+                btn.setText(t.btnDescGenerate);
             }
         });
     }

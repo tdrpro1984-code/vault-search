@@ -32,9 +32,9 @@ export interface VaultSearchSettings {
     chunkSize: number;
     chunkOverlap: number;
     /** AI curation master switch (design D9). Gates description generation
-     *  commands and topic-grouped MOC. Phase 8 will flip the default to false
-     *  and add an Onboarding modal; dogfood phase keeps it true so existing
-     *  flows stay reachable from the command palette without manual toggling. */
+     *  commands and topic-grouped MOC. Default false — the OnboardingModal
+     *  asks the user explicitly on first launch; existing users keep their
+     *  saved value because Object.assign only fills missing keys. */
     enableAICuration: boolean;
 }
 
@@ -56,39 +56,12 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     llmModel: "qwen3:1.7b",
     chunkSize: 2000,
     chunkOverlap: 100,
-    enableAICuration: true,
+    enableAICuration: false,
 };
 
-export interface NoteEntry {
-    title: string;
-    tags: string[];
-    tier: "hot" | "cold";
-    mtime: number;
-    embedding: number[];
-    chunks?: number[][];
-}
-
-export interface IndexMeta {
-    model: string;
-    dim: number;
-    indexedAt: string;
-    count: number;
-}
-
-export interface VaultSearchIndex {
-    meta: IndexMeta;
-    notes: Record<string, NoteEntry>;
-}
-
-/** data.json stores settings only (v0.3.0+). Index is in index.json. */
+/** data.json stores settings only — index lives in SQLite (Phase 4+). */
 export interface VaultSearchData {
     settings: VaultSearchSettings;
-}
-
-/** Legacy format (v0.2.0): data.json stored both settings and index. */
-export interface VaultSearchDataLegacy {
-    settings: VaultSearchSettings;
-    index: VaultSearchIndex | null;
 }
 
 export interface SearchResult {

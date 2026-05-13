@@ -9,29 +9,20 @@ import {
 } from "./embedding";
 import {
     VaultSearchData,
-    VaultSearchDataLegacy,
     VaultSearchSettings,
-    VaultSearchIndex,
     DEFAULT_SETTINGS,
 } from "./types";
 import { Indexer } from "./indexer";
 import { SearchModal } from "./searcher";
 import { SearchView, VIEW_TYPE_SEARCH } from "./search-view";
 import { VaultSearchSettingTab } from "./settings";
-import { searchNoteScore } from "./utils";
+import { findSimilarSqlite } from "./search/discoverSqlite";
 import { DescriptionGenerator } from "./description-generator";
+import { OnboardingModal, applyOnboardingChoice } from "./ui/OnboardingModal";
 import { t } from "./i18n";
 
 export default class VaultSearchPlugin extends Plugin {
     settings!: VaultSearchSettings;
-    /**
-     * v0.3.x in-memory index. Phase 4 (004 rebrand) replaces this with a
-     * SQLiteStore-backed pipeline; this field stays `null` until Phase 5
-     * rewires search/find-similar/discover to read from `store`. Existing
-     * `if (!this.plugin.index)` guards in search-view / searcher /
-     * description-generator / moc-generator will short-circuit safely.
-     */
-    index: VaultSearchIndex | null = null;
     indexer!: Indexer;
     descGenerator!: DescriptionGenerator;
     store: SQLiteStore | null = null;
@@ -90,7 +81,8 @@ export default class VaultSearchPlugin extends Plugin {
             name: t.cmdFindSimilar,
             checkCallback: (checking) => {
                 const file = this.app.workspace.getActiveFile();
-                if (!file || !this.index) return false;
+                if (!file || file.extension !== "md") return false;
+                if (!this.store) return false;
                 if (checking) return true;
                 void this.findSimilar(file);
                 return true;
@@ -149,17 +141,26 @@ export default class VaultSearchPlugin extends Plugin {
             },
         });
 
-        // Phase 6: right-click "Generate description" on any .md in the
-        // file explorer or editor menu. Same enableAICuration gate.
+        // Phase 6/8: right-click items on any .md file in the file
+        // explorer or editor. "Find similar" always shows when an index
+        // exists; "Generate description" is gated on enableAICuration.
         this.registerEvent(
             this.app.workspace.on("file-menu", (menu: Menu, file) => {
-                if (!this.settings.enableAICuration) return;
                 if (!(file instanceof TFile) || file.extension !== "md") return;
-                menu.addItem((item) => {
-                    item.setTitle(t.menuDescGenerate)
-                        .setIcon("sparkles")
-                        .onClick(() => void this.descGenerator.generateForActiveNote(file));
-                });
+                if (this.store) {
+                    menu.addItem((item) => {
+                        item.setTitle(t.menuFindSimilar)
+                            .setIcon("search")
+                            .onClick(() => void this.findSimilar(file));
+                    });
+                }
+                if (this.settings.enableAICuration) {
+                    menu.addItem((item) => {
+                        item.setTitle(t.menuDescGenerate)
+                            .setIcon("sparkles")
+                            .onClick(() => void this.descGenerator.generateForActiveNote(file));
+                    });
+                }
             }),
         );
 
@@ -192,7 +193,7 @@ export default class VaultSearchPlugin extends Plugin {
         // Active Discovery: file-open listener
         this.registerEvent(
             this.app.workspace.on("file-open", (file) => {
-                if (!file || !this.index) return;
+                if (!file || !this.store) return;
                 this.onActiveFileChange(file);
             })
         );
@@ -219,6 +220,25 @@ export default class VaultSearchPlugin extends Plugin {
 
         // Settings tab
         this.addSettingTab(new VaultSearchSettingTab(this.app, this));
+
+        // Phase 8 (004 rebrand): first-launch onboarding. `last_indexed_at`
+        // is empty until the very first rebuild succeeds, so it doubles as
+        // "user has never finished setup" signal — more reliable than just
+        // checking that the SQLite db file exists (schema_version is set
+        // at open() time).
+        this.app.workspace.onLayoutReady(() => {
+            if (this.store && !this.store.getMeta("last_indexed_at")) {
+                this.showOnboardingModal();
+            }
+        });
+
+        // Dev command: force-show the onboarding modal for QA. Useful when
+        // dogfooding the UX after the first index has already been built.
+        this.addCommand({
+            id: "dev-show-onboarding",
+            name: "[004 dev] Show onboarding modal",
+            callback: () => this.showOnboardingModal(),
+        });
 
         // ─── Phase 1 (004 rebrand) — Worker boot probe dev command ───
         // Verifies that the bundled worker.js can be loaded + Web Worker boots
@@ -544,6 +564,12 @@ export default class VaultSearchPlugin extends Plugin {
         console.debug("Vault Search unloaded");
     }
 
+    private showOnboardingModal() {
+        new OnboardingModal(this.app, this, async (choice) => {
+            await applyOnboardingChoice(this, choice);
+        }).open();
+    }
+
     async activateView() {
         const { workspace } = this.app;
         let leaf = workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
@@ -583,7 +609,7 @@ export default class VaultSearchPlugin extends Plugin {
     }
 
     private async openGlobalDiscover() {
-        if (!this.index) {
+        if (!this.store) {
             new Notice(t.discoverNoIndex);
             return;
         }
@@ -618,53 +644,35 @@ export default class VaultSearchPlugin extends Plugin {
         await this.descGenerator.generateForFiles(targets);
     }
 
-    // ── Find Similar ─────────────────────────────────
+    // ── Find Similar (Phase 8: SQLite-backed) ────────────
 
     async findSimilar(file: TFile) {
-        if (!this.index) {
+        const store = this.store;
+        if (!store) {
             new Notice(t.noticeIndexEmpty);
             return;
         }
-        const entry = this.index.notes[file.path];
-        if (!entry || !entry.embedding || entry.embedding.length === 0) {
+        const note = store.getNote(file.path);
+        if (!note || note.bodyVec.length === 0) {
             new Notice(t.notIndexed);
             return;
         }
 
-        // Collect all query vectors: main embedding + chunks
-        const queryVecs: number[][] = [entry.embedding];
-        if (entry.chunks) {
-            for (const chunk of entry.chunks) {
-                if (chunk.length > 0) queryVecs.push(chunk);
-            }
-        }
-
-        const results: import("./types").SearchResult[] = [];
-        for (const [path, other] of Object.entries(this.index.notes)) {
-            if (path === file.path) continue;
-            let maxScore = 0;
-            for (const qv of queryVecs) {
-                const s = searchNoteScore(qv, other);
-                if (s > maxScore) maxScore = s;
-            }
-            if (maxScore >= this.settings.minScore) {
-                results.push({ path, title: other.title, tags: other.tags, score: maxScore, tier: other.tier });
-            }
-        }
-        results.sort((a, b) => b.score - a.score);
-        const topResults = results.slice(0, this.settings.topResults);
+        const topResults = findSimilarSqlite(file.path, store, {
+            minScore: this.settings.minScore,
+            topResults: this.settings.topResults,
+        });
 
         if (topResults.length === 0) {
             new Notice(t.noSimilar);
             return;
         }
 
-        // Show in sidebar
         await this.activateView();
         const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
         if (leaf) {
             const view = leaf.view as SearchView;
-            view.showResults(topResults, t.similarTo(entry.title));
+            view.showResults(topResults, t.similarTo(note.title));
         }
     }
 
@@ -913,7 +921,7 @@ export default class VaultSearchPlugin extends Plugin {
     }
 
     async loadSettings() {
-        const data = await this.loadData() as Partial<VaultSearchDataLegacy> | null;
+        const data = await this.loadData() as Partial<VaultSearchData> | null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings);
 
         // Phase 4 (004 rebrand) chunk tuning migration: v0.3 default 1000/200
@@ -924,10 +932,14 @@ export default class VaultSearchPlugin extends Plugin {
             this.settings.chunkOverlap = 100;
         }
 
-        // v0.3.x stored either {settings, index} (v0.2.0) or {settings} (v0.3.0+).
-        // Phase 4 (004 rebrand) ignores any embedded `index` field — index.json
-        // (and any legacy data.json index) are abandoned in favour of SQLite.
-        // dropLegacyIndexJson runs after openStore() to clean the old file.
+        // Phase 8 (004 rebrand): strip legacy v0.3.x fields that were carried
+        // along by the loose Object.assign spread. Avoids stale `chunkingMode`,
+        // `minDescLength`, and embedded `index` chunks polluting data.json.
+        const settingsAny = this.settings as unknown as Record<string, unknown>;
+        delete settingsAny.chunkingMode;
+        delete settingsAny.minDescLength;
+        delete settingsAny.index;
+
         await this.saveData({ settings: this.settings } as VaultSearchData);
     }
 

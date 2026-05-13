@@ -1,5 +1,12 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+// Settings tab — Phase 8 three-section layout (Quick / AI Curation / Advanced)
+//
+// Design D9: Quick Setup keeps the 3 onboarding-critical knobs visible;
+// AI Curation is gated behind enableAICuration; Advanced is collapsed
+// behind a <details> element so power-user knobs don't crowd the screen.
+
+import { App, Modal, PluginSettingTab, Setting } from "obsidian";
 import type VaultSearchPlugin from "./main";
+import type { EmbeddingProviderType } from "./types";
 import { fetchOllamaModels, formatLocalDateTime } from "./utils";
 import { t } from "./i18n";
 
@@ -14,11 +21,75 @@ export class VaultSearchSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
+        this.buildQuickSetup(containerEl);
+        this.buildAICuration(containerEl);
+        this.buildAdvanced(containerEl);
+        void this.loadModelOptions();
+    }
 
-        // Section 1: Search & Index
-        new Setting(containerEl).setName(t.sectionSearch).setHeading();
+    // ── Section 1: Quick Setup ─────────────────────────────────
 
-        const urlSetting = new Setting(containerEl)
+    private buildQuickSetup(parent: HTMLElement) {
+        new Setting(parent).setName(t.sectionQuickSetup).setHeading();
+
+        const providerSetting = new Setting(parent)
+            .setName(t.embeddingProvider);
+        // setDesc with \n is collapsed in Obsidian; build a fragment so each
+        // line shows on its own.
+        const descFrag = document.createDocumentFragment();
+        const lines = t.embeddingProviderDesc.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            if (i > 0) descFrag.appendChild(document.createElement("br"));
+            descFrag.appendChild(document.createTextNode(lines[i]));
+        }
+        providerSetting.setDesc(descFrag);
+        providerSetting
+            .addDropdown(drop => {
+                drop.addOption("wasm", t.embeddingProviderBuiltin);
+                drop.addOption("ollama", t.embeddingProviderOllama);
+                drop.addOption("openai-compatible", t.embeddingProviderOpenAI);
+                drop.setValue(this.plugin.settings.embeddingProvider);
+                drop.onChange(async (val) => {
+                    const newProvider = val as EmbeddingProviderType;
+                    const old = this.plugin.settings.embeddingProvider;
+                    if (newProvider === old) return;
+                    const confirmed = await this.confirmProviderSwitch();
+                    if (!confirmed) {
+                        drop.setValue(old);
+                        return;
+                    }
+                    this.plugin.settings.embeddingProvider = newProvider;
+                    await this.plugin.saveSettings();
+                    await this.plugin.reloadBackends();
+                    this.display();
+                    void this.plugin.rebuildIndex();
+                });
+            });
+
+        if (this.plugin.settings.embeddingProvider === "wasm") {
+            const note = parent.createDiv({ cls: "vault-search-note" });
+            note.setText(t.builtinModelNote);
+        } else {
+            this.buildExternalEmbeddingFields(parent);
+        }
+
+        new Setting(parent)
+            .setName(t.excludePatterns)
+            .setDesc(t.excludePatternsDesc)
+            .addTextArea(text => {
+                text.setValue(this.plugin.settings.excludePatterns.join("\n"));
+                text.onChange(async (val) => {
+                    this.plugin.settings.excludePatterns = val
+                        .split("\n")
+                        .map(s => s.trim())
+                        .filter(Boolean);
+                    await this.plugin.saveSettings();
+                });
+            });
+    }
+
+    private buildExternalEmbeddingFields(parent: HTMLElement) {
+        const urlSetting = new Setting(parent)
             .setName(t.ollamaUrl)
             .setDesc(t.ollamaUrlDesc)
             .addText(text => {
@@ -32,7 +103,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             });
         this.updateRemoteWarning(urlSetting, this.plugin.settings.ollamaUrl);
 
-        new Setting(containerEl)
+        new Setting(parent)
             .setName(t.apiFormat)
             .setDesc(t.apiFormatDesc)
             .addDropdown(drop => {
@@ -46,7 +117,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(parent)
             .setName(t.apiKeyLabel)
             .setDesc(t.apiKeyDesc)
             .addText(text => {
@@ -59,15 +130,64 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        const embSetting = new Setting(containerEl)
+        const embSetting = new Setting(parent)
             .setName(t.embeddingModel)
             .setDesc(t.embeddingModelDesc);
         this.addModelDropdown(embSetting, this.plugin.settings.ollamaModel, async (val) => {
+            const old = this.plugin.settings.ollamaModel;
+            if (val === old) return;
+            const confirmed = await this.confirmProviderSwitch();
+            if (!confirmed) {
+                // Re-render so dropdown reverts visually.
+                this.display();
+                return;
+            }
             this.plugin.settings.ollamaModel = val;
             await this.plugin.saveSettings();
+            await this.plugin.reloadBackends();
+            void this.plugin.rebuildIndex();
         }, "embedding");
+    }
 
-        new Setting(containerEl)
+    // ── Section 2: AI Curation ─────────────────────────────────
+
+    private buildAICuration(parent: HTMLElement) {
+        new Setting(parent).setName(t.sectionAICuration).setHeading();
+
+        new Setting(parent)
+            .setName(t.enableAICuration)
+            .setDesc(t.enableAICurationDesc)
+            .addToggle(toggle => {
+                toggle.setValue(this.plugin.settings.enableAICuration);
+                toggle.onChange(async (val) => {
+                    this.plugin.settings.enableAICuration = val;
+                    await this.plugin.saveSettings();
+                    this.display();
+                });
+            });
+
+        if (!this.plugin.settings.enableAICuration) return;
+
+        const llmSetting = new Setting(parent)
+            .setName(t.llmModel)
+            .setDesc(t.llmModelDesc);
+        this.addModelDropdown(llmSetting, this.plugin.settings.llmModel, async (val) => {
+            this.plugin.settings.llmModel = val;
+            await this.plugin.saveSettings();
+        }, "llm");
+    }
+
+    // ── Section 3: Advanced (collapsed) ────────────────────────
+
+    private buildAdvanced(parent: HTMLElement) {
+        const details = parent.createEl("details", { cls: "vault-search-advanced" });
+        details.createEl("summary", {
+            text: t.sectionAdvanced,
+            cls: "vault-search-advanced-summary",
+        });
+        const adv = details;
+
+        new Setting(adv)
             .setName(t.topResults)
             .setDesc(t.topResultsDesc)
             .addText(text => {
@@ -81,7 +201,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.minScore)
             .setDesc(t.minScoreDesc)
             .addText(text => {
@@ -95,7 +215,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.maxEmbedChars)
             .setDesc(t.maxEmbedCharsDesc)
             .addText(text => {
@@ -109,7 +229,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.hotDays)
             .setDesc(t.hotDaysDesc)
             .addText(text => {
@@ -123,7 +243,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.searchScope)
             .setDesc(t.searchScopeDesc)
             .addDropdown(drop => {
@@ -137,21 +257,35 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
-            .setName(t.excludePatterns)
-            .setDesc(t.excludePatternsDesc)
-            .addTextArea(text => {
-                text.setValue(this.plugin.settings.excludePatterns.join("\n"));
+        new Setting(adv)
+            .setName(t.chunkSize)
+            .setDesc(t.chunkSizeDesc)
+            .addText(text => {
+                text.setValue(String(this.plugin.settings.chunkSize));
                 text.onChange(async (val) => {
-                    this.plugin.settings.excludePatterns = val
-                        .split("\n")
-                        .map(s => s.trim())
-                        .filter(Boolean);
-                    await this.plugin.saveSettings();
+                    const n = parseInt(val, 10);
+                    if (!isNaN(n) && n >= 200) {
+                        this.plugin.settings.chunkSize = n;
+                        await this.plugin.saveSettings();
+                    }
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
+            .setName(t.chunkOverlap)
+            .setDesc(t.chunkOverlapDesc)
+            .addText(text => {
+                text.setValue(String(this.plugin.settings.chunkOverlap));
+                text.onChange(async (val) => {
+                    const n = parseInt(val, 10);
+                    if (!isNaN(n) && n >= 0 && n < this.plugin.settings.chunkSize) {
+                        this.plugin.settings.chunkOverlap = n;
+                        await this.plugin.saveSettings();
+                    }
+                });
+            });
+
+        new Setting(adv)
             .setName(t.synonymsLabel)
             .setDesc(t.synonymsDesc)
             .addTextArea(text => {
@@ -175,35 +309,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
-            .setName(t.chunkSize)
-            .setDesc(t.chunkSizeDesc)
-            .addText(text => {
-                text.setValue(String(this.plugin.settings.chunkSize));
-                text.onChange(async (val) => {
-                    const n = parseInt(val, 10);
-                    if (!isNaN(n) && n >= 200) {
-                        this.plugin.settings.chunkSize = n;
-                        await this.plugin.saveSettings();
-                    }
-                });
-            });
-
-        new Setting(containerEl)
-            .setName(t.chunkOverlap)
-            .setDesc(t.chunkOverlapDesc)
-            .addText(text => {
-                text.setValue(String(this.plugin.settings.chunkOverlap));
-                text.onChange(async (val) => {
-                    const n = parseInt(val, 10);
-                    if (!isNaN(n) && n >= 0 && n < this.plugin.settings.chunkSize) {
-                        this.plugin.settings.chunkOverlap = n;
-                        await this.plugin.saveSettings();
-                    }
-                });
-            });
-
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.autoIndex)
             .setDesc(t.autoIndexDesc)
             .addToggle(toggle => {
@@ -214,10 +320,9 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        // Index actions
-        new Setting(containerEl).setName(t.actions).setHeading();
+        new Setting(adv).setName(t.actions).setHeading();
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.rebuildIndex)
             .setDesc(t.rebuildIndexDesc)
             .addButton(btn => {
@@ -233,7 +338,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        new Setting(containerEl)
+        new Setting(adv)
             .setName(t.updateIndex)
             .setDesc(t.updateIndexDesc)
             .addButton(btn => {
@@ -248,52 +353,50 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        // Index stats
-        const index = this.plugin.index;
-        if (index) {
-            new Setting(containerEl).setName(t.indexStats).setHeading();
-            const stats = containerEl.createDiv({ cls: "vault-search-stats" });
-            const notes = Object.values(index.notes);
-            const hot = notes.filter(n => n.tier === "hot").length;
-            const cold = notes.filter(n => n.tier === "cold").length;
-            stats.createEl("p", { text: `${t.totalNotes}: ${index.meta.count}` });
-            stats.createEl("p", { text: `${t.hot}: ${hot} / ${t.cold}: ${cold}` });
-            stats.createEl("p", { text: `${t.model}: ${index.meta.model}` });
-            stats.createEl("p", { text: `${t.dimensions}: ${index.meta.dim}` });
-            const indexedDate = new Date(index.meta.indexedAt);
-            const localTime = isNaN(indexedDate.getTime())
-                ? index.meta.indexedAt
-                : formatLocalDateTime(indexedDate);
-            stats.createEl("p", { text: `${t.lastIndexed}: ${localTime}` });
+        const store = this.plugin.store;
+        if (store) {
+            new Setting(adv).setName(t.indexStats).setHeading();
+            const stats = adv.createDiv({ cls: "vault-search-stats" });
+            const allBody = store.getAllBodyVecs();
+            let hotCount = 0;
+            let coldCount = 0;
+            for (const path of allBody.keys()) {
+                const note = store.getNote(path);
+                if (!note) continue;
+                if (note.tier === "cold") coldCount++;
+                else hotCount++;
+            }
+            stats.createEl("p", { text: `${t.totalNotes}: ${allBody.size}` });
+            stats.createEl("p", { text: `${t.hot}: ${hotCount} / ${t.cold}: ${coldCount}` });
+            const modelId = store.getMeta("embedding_model_id") ?? "—";
+            const dim = store.getMeta("embedding_dim") ?? "—";
+            stats.createEl("p", { text: `${t.model}: ${modelId}` });
+            stats.createEl("p", { text: `${t.dimensions}: ${dim}` });
+            const lastIndexedRaw = store.getMeta("last_indexed_at");
+            if (lastIndexedRaw) {
+                const d = new Date(lastIndexedRaw);
+                const localTime = isNaN(d.getTime()) ? lastIndexedRaw : formatLocalDateTime(d);
+                stats.createEl("p", { text: `${t.lastIndexed}: ${localTime}` });
+            }
         }
-
-        // Section 2: AI Curation (Phase 6/7 — gates description + topic-grouped MOC)
-        new Setting(containerEl).setName(t.sectionAICuration).setHeading();
-
-        new Setting(containerEl)
-            .setName(t.enableAICuration)
-            .setDesc(t.enableAICurationDesc)
-            .addToggle(toggle => {
-                toggle.setValue(this.plugin.settings.enableAICuration);
-                toggle.onChange(async (val) => {
-                    this.plugin.settings.enableAICuration = val;
-                    await this.plugin.saveSettings();
-                });
-            });
-
-        const llmSetting = new Setting(containerEl)
-            .setName(t.llmModel)
-            .setDesc(t.llmModelDesc);
-        this.addModelDropdown(llmSetting, this.plugin.settings.llmModel, async (val) => {
-            this.plugin.settings.llmModel = val;
-            await this.plugin.saveSettings();
-        }, "llm");
-
-        // Async: populate model dropdowns
-        void this.loadModelOptions();
     }
 
-    private addModelDropdown(setting: Setting, currentValue: string, onChange: (val: string) => Promise<void>, filterType?: "embedding" | "llm") {
+    // ── Modal + helpers ────────────────────────────────────────
+
+    /** Show a destructive-action confirm modal; resolves to user's choice. */
+    private confirmProviderSwitch(): Promise<boolean> {
+        return new Promise((resolve) => {
+            const noteCount = this.plugin.store?.getAllBodyVecs().size ?? 0;
+            new ProviderSwitchModal(this.app, noteCount, resolve).open();
+        });
+    }
+
+    private addModelDropdown(
+        setting: Setting,
+        currentValue: string,
+        onChange: (val: string) => Promise<void>,
+        filterType?: "embedding" | "llm",
+    ) {
         setting.addDropdown(drop => {
             drop.addOption("", "Loading...");
             if (currentValue) drop.addOption(currentValue, currentValue);
@@ -322,7 +425,13 @@ export class VaultSearchSettingTab extends PluginSettingTab {
         } catch { /* invalid URL, ignore */ }
     }
 
+    /**
+     * Populate the model dropdowns (LLM + embedding) from the configured
+     * Ollama / OpenAI-compatible endpoint. Built-in provider has nothing
+     * to fetch — bail early.
+     */
     private async loadModelOptions() {
+        if (this.plugin.settings.embeddingProvider === "wasm") return;
         const models = await fetchOllamaModels(this.plugin.settings.ollamaUrl, this.plugin.settings.apiFormat);
         if (models.length === 0) return;
 
@@ -335,7 +444,6 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             select.empty();
             select.createEl("option", { value: "", text: t.selectModel });
 
-            // Filter: only show relevant models
             const filtered = models.filter(m => {
                 if (filterType === "embedding") return m.isEmbedding;
                 if (filterType === "llm") return !m.isEmbedding;
@@ -345,12 +453,57 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             for (const m of filtered) {
                 let label = m.name;
                 if (m.sizeGB > 0) {
-                    const sizeLabel = m.sizeGB < 1 ? `${(m.sizeGB * 1000).toFixed(0)}MB` : `${m.sizeGB.toFixed(1)}GB`;
+                    const sizeLabel = m.sizeGB < 1
+                        ? `${(m.sizeGB * 1000).toFixed(0)}MB`
+                        : `${m.sizeGB.toFixed(1)}GB`;
                     label = `${m.name} (${sizeLabel})`;
                 }
                 select.createEl("option", { value: m.name, text: label });
             }
             select.value = currentValue;
         });
+    }
+}
+
+class ProviderSwitchModal extends Modal {
+    constructor(
+        app: App,
+        private noteCount: number,
+        private onResult: (confirmed: boolean) => void,
+    ) {
+        super(app);
+    }
+
+    onOpen(): void {
+        let decided = false;
+        this.titleEl.setText(t.providerSwitchTitle);
+        this.contentEl.createEl("p", { text: t.providerSwitchBody(this.noteCount) });
+
+        const btnRow = this.contentEl.createDiv({ cls: "vault-search-modal-btnrow" });
+
+        const cancelBtn = btnRow.createEl("button", { text: t.providerSwitchCancel });
+        cancelBtn.addEventListener("click", () => {
+            decided = true;
+            this.onResult(false);
+            this.close();
+        });
+
+        const confirmBtn = btnRow.createEl("button", { text: t.providerSwitchConfirm });
+        confirmBtn.addClass("mod-warning");
+        confirmBtn.addEventListener("click", () => {
+            decided = true;
+            this.onResult(true);
+            this.close();
+        });
+
+        // If user dismisses by clicking outside / Esc, treat as cancel.
+        this.scope.register([], "Escape", () => {
+            if (!decided) this.onResult(false);
+            this.close();
+        });
+    }
+
+    onClose(): void {
+        this.contentEl.empty();
     }
 }
