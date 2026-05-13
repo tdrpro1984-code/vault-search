@@ -48,6 +48,11 @@ type Extractor = (
 let extractor: Extractor | null = null;
 let modelDimension: number | null = null;
 
+/** Forward a log line to the main thread (worker console.* is invisible in Obsidian DevTools). */
+function postLog(msg: string): void {
+    ctx.postMessage({ type: 'log', message: msg });
+}
+
 ctx.onmessage = async (event: MessageEvent<IncomingMsg>) => {
     const msg = event.data;
     try {
@@ -71,6 +76,18 @@ ctx.onmessage = async (event: MessageEvent<IncomingMsg>) => {
 };
 
 async function handleInit(msg: InitMsg): Promise<void> {
+    // CRITICAL — joybro/obsidian-similar-notes workaround (issue
+    // huggingface/transformers.js#1238): Obsidian's Electron renderer sets
+    // `process` (with release.name === 'node') inside dedicated workers,
+    // tripping transformers.js's env.js Node-detection. The downstream
+    // `return_path = true` branch then breaks model loading.
+    // Removing `process` outright forces the browser path. Must happen
+    // BEFORE the transformers dynamic import below.
+    Object.defineProperty(globalThis, 'process', {
+        get: () => undefined,
+        configurable: true,
+    });
+
     // Dynamic import so the bundle only loads transformers when init runs.
     // esbuild's alias in worker stage maps this to transformers.web.js.
     const tfm = await import('@huggingface/transformers');
@@ -79,15 +96,8 @@ async function handleInit(msg: InitMsg): Promise<void> {
         (tfm.env as unknown as { remoteHost: string }).remoteHost = msg.remoteUrl;
     }
 
-    // Match erayaydn0/obsidian-vault-search 0.1.0 worker init exactly: only
-    // set proxy=false + numThreads=1 and let the ORT wasm bundle wire up
-    // its own module/binary pair. Letting transformers.js pre-load via
-    // useWasmCache or forcing our own wasmBinary triggers the "no available
-    // backend; Failed to resolve module specifier 'worker_threads'" error
-    // in Obsidian's Electron renderer (no crossOriginIsolated → SAB
-    // unavailable → ort's multi-thread fallback ends up requiring node's
-    // worker_threads module). This combination works on @huggingface/transformers
-    // ^4.0.1 with the ort version pulled in transitively.
+    // ORT wasm tuning still applies to the wasm fallback path. WebGPU
+    // path ignores these.
     const ortWasm = (tfm.env as unknown as {
         backends?: { onnx?: { wasm?: { proxy?: boolean; numThreads?: number } } };
     }).backends?.onnx?.wasm;
@@ -95,26 +105,56 @@ async function handleInit(msg: InitMsg): Promise<void> {
         ortWasm.proxy = false;
         ortWasm.numThreads = 1;
     }
-    // Caching: transformers.js default uses browser cache (IndexedDB via Cache API
-    // wrapper). In Electron renderer this works out of the box.
-    const pipeline = tfm.pipeline;
-    const dtype = msg.dtype ?? 'q8';
 
-    const built = await pipeline('feature-extraction', msg.modelId, {
-        device: 'wasm',
-        dtype,
-        progress_callback: (p: unknown) => {
-            const pe = p as { status?: string; loaded?: number; total?: number; file?: string };
-            if (pe && pe.status && typeof pe.loaded === 'number' && typeof pe.total === 'number') {
-                ctx.postMessage({
-                    type: 'progress',
-                    loaded: pe.loaded,
-                    total: pe.total,
-                    phase: `${pe.status}${pe.file ? ` ${pe.file}` : ''}`,
-                });
-            }
-        },
-    } as unknown as Parameters<typeof pipeline>[2]);
+    const pipeline = tfm.pipeline;
+
+    // WebGPU backend doesn't accept int8 quantization — only fp32/fp16
+    // model files exist on the HF Hub for the WebGPU path. WASM backend
+    // takes q8 fine and runs ~4x faster on int8 ops. So we pick per device.
+    const dtypeForDevice = (device: 'webgpu' | 'wasm'): 'fp32' | 'fp16' | 'q8' | 'q4' => {
+        if (device === 'webgpu') return 'fp32';
+        return msg.dtype ?? 'q8';
+    };
+
+    const buildPipeline = (device: 'webgpu' | 'wasm') => pipeline(
+        'feature-extraction',
+        msg.modelId,
+        {
+            device,
+            dtype: dtypeForDevice(device),
+            progress_callback: (p: unknown) => {
+                const pe = p as { status?: string; loaded?: number; total?: number; file?: string };
+                if (pe && pe.status && typeof pe.loaded === 'number' && typeof pe.total === 'number') {
+                    ctx.postMessage({
+                        type: 'progress',
+                        loaded: pe.loaded,
+                        total: pe.total,
+                        phase: `${pe.status}${pe.file ? ` ${pe.file}` : ''}`,
+                    });
+                }
+            },
+        } as unknown as Parameters<typeof pipeline>[2],
+    );
+
+    const hasWebGpu = typeof (self as unknown as { navigator?: { gpu?: unknown } }).navigator?.gpu !== 'undefined';
+    postLog(`[vault-curate worker] hasWebGpu=${hasWebGpu}`);
+    let built: unknown;
+    if (hasWebGpu) {
+        try {
+            postLog(`[vault-curate worker] trying device=webgpu dtype=fp32 model=${msg.modelId}`);
+            built = await buildPipeline('webgpu');
+            postLog(`[vault-curate worker] device=webgpu ready`);
+        } catch (err) {
+            const msg2 = err instanceof Error ? err.message : String(err);
+            postLog(`[vault-curate worker] webgpu failed (${msg2}); falling back to wasm`);
+            built = await buildPipeline('wasm');
+            postLog(`[vault-curate worker] device=wasm ready (after webgpu failure)`);
+        }
+    } else {
+        postLog(`[vault-curate worker] no navigator.gpu — device=wasm`);
+        built = await buildPipeline('wasm');
+        postLog(`[vault-curate worker] device=wasm ready`);
+    }
     extractor = built as unknown as Extractor;
 
     // Probe with a tiny input to discover dimension.

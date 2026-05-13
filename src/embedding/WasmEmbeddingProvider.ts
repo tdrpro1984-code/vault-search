@@ -152,7 +152,12 @@ export class WasmEmbeddingProvider implements EmbeddingProvider {
             | { type: 'ready'; dimension: number }
             | { type: 'init-error'; message: string; stack?: string }
             | { type: 'progress'; loaded: number; total: number; phase?: string }
-            | { type: 'result'; id: number; vectors: Float32Array[] | null; error?: string };
+            | { type: 'result'; id: number; vectors: Float32Array[] | null; error?: string }
+            | { type: 'log'; message: string };
+        if (m.type === 'log') {
+            console.warn(m.message);
+            return;
+        }
         if (m.type === 'ready') {
             this._dimension = m.dimension;
             this.warmedUp = true;
