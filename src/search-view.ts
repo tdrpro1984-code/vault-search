@@ -49,6 +49,15 @@ export class SearchView extends ItemView {
     private mocBtn!: HTMLButtonElement;
     private globalCancelled = { value: false };
     private lastDiscoverResults: SearchResult[] = [];
+    /** Path the latest discover-for-file invocation is computing for.
+     *  Used to discard stale renders when the user switches files faster
+     *  than the cosine sweep completes. */
+    private discoverForPath: string | null = null;
+    /** Abort flag for the in-flight per-file sweep. Flipped to true when a
+     *  new sweep starts so the old one bails out cooperatively (the helper
+     *  checks `cancelled.value` each yield) — closes the A→B→A race where
+     *  B's late result would overwrite A's view. */
+    private perFileAbort: { value: boolean } | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: VaultSearchPlugin) {
         super(leaf);
@@ -103,7 +112,7 @@ export class SearchView extends ItemView {
         } else if (id === "discover" && this.discoverMode === "current") {
             // Trigger discovery for current file when switching to Discover tab
             const file = this.app.workspace.getActiveFile();
-            if (file) this.discoverForFile(file);
+            if (file) void this.discoverForFile(file);
         }
     }
 
@@ -234,7 +243,7 @@ export class SearchView extends ItemView {
         if (mode === "current") {
             const file = this.app.workspace.getActiveFile();
             if (file) {
-                this.discoverForFile(file);
+                void this.discoverForFile(file);
             } else {
                 this.discoverStatusEl.setText("");
                 this.discoverResultsEl.empty();
@@ -255,7 +264,19 @@ export class SearchView extends ItemView {
         this.setDiscoverMode("global");
     }
 
-    discoverForFile(file: TFile) {
+    async discoverForFile(file: TFile): Promise<void> {
+        // Cancel any prior sweep that hasn't finished yet — without this,
+        // an A→B→A switch where B is still running could let B's late
+        // result render INTO the A view (stamp matches B at B's resume).
+        if (this.perFileAbort) this.perFileAbort.value = true;
+        const localAbort = { value: false };
+        this.perFileAbort = localAbort;
+
+        // Stamp BEFORE any guards so an un-indexed file visit also updates
+        // the stamp. Otherwise a stale stamp from an earlier indexed file
+        // can let that earlier sweep's late completion overwrite the
+        // "not indexed" message we're about to set here.
+        this.discoverForPath = file.path;
         const store = this.plugin.store;
         if (!store) {
             this.discoverStatusEl.setText(t.discoverNoIndex);
@@ -268,11 +289,15 @@ export class SearchView extends ItemView {
             this.discoverResultsEl.empty();
             return;
         }
-
-        const results = discoverForNoteSqlite(file.path, store, {
+        this.discoverStatusEl.setText(t.discoverComputing);
+        const results = await discoverForNoteSqlite(file.path, store, {
             minScore: this.plugin.settings.minScore,
             topResults: this.plugin.settings.topResults,
-        });
+        }, localAbort);
+        // Discard stale result if another file took over while we were
+        // computing. Two guards: localAbort flipped by a later sweep AND
+        // path stamp moved on. Either alone is enough; both for safety.
+        if (localAbort.value || this.discoverForPath !== file.path) return;
         this.discoverStatusEl.setText(
             results.length > 0
                 ? t.discoverRelatedTo(note.title)
@@ -398,10 +423,20 @@ export class SearchView extends ItemView {
         }
         const notesForMoc: NoteForMoc[] = [];
         const missingPaths: string[] = [];
+        // Establish the canonical dim from the first valid note so we can
+        // skip rows with mismatched dim (provider switched mid-index).
+        // Mixed dim feeds clustering NaN distances and corrupts the MOC silently.
+        let canonicalDim = 0;
+        let dimMismatchCount = 0;
         for (const r of results) {
             const stored = store.getNote(r.path);
             if (!stored || stored.bodyVec.length === 0) {
                 missingPaths.push(r.path);
+                continue;
+            }
+            if (canonicalDim === 0) canonicalDim = stored.bodyVec.length;
+            else if (stored.bodyVec.length !== canonicalDim) {
+                dimMismatchCount++;
                 continue;
             }
             let description = stored.description ?? "";
@@ -425,6 +460,12 @@ export class SearchView extends ItemView {
 
         console.debug("[MOC 2.0] notesForMoc after assembly:", notesForMoc.length,
             "out of", results.length, "results");
+        if (dimMismatchCount > 0) {
+            console.warn(`[MOC 2.0] skipped ${dimMismatchCount} notes with mismatched embedding dim (canonical=${canonicalDim}). Re-index to recover.`);
+            // Surface to the user — they won't open devtools but they
+            // should know mixed-dim state explains the smaller MOC.
+            new Notice(t.dimMismatchNotice(dimMismatchCount), 10000);
+        }
         if (notesForMoc.length < 5) {
             console.warn("[MOC 2.0] too few notesForMoc. Missing in store:", missingPaths);
             new Notice(t.mocTooFewResults);

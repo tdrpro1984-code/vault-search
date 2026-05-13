@@ -82,6 +82,99 @@ export function validateServerUrl(url: string) {
     }
 }
 
+/**
+ * Strict loopback host detection — catches the bypasses a literal allow-list
+ * misses:
+ *   - bare "0" resolves to 0.0.0.0 on Linux/macOS
+ *   - 127.x.x.x covers the whole /8 loopback block
+ *   - expanded IPv6 ("0:0:0:0:0:0:0:1") + zone-id ("::1%lo0")
+ *   - bracketed IPv6 from URL.hostname
+ *   - integer-encoded IPv4 (2130706433 = 127.0.0.1)
+ *
+ * Anything else is treated as remote so security warnings (HTTP+Bearer,
+ * cleartext keys) fire correctly.
+ */
+export function isLoopbackHost(rawHost: string): boolean {
+    if (!rawHost) return false;
+    // URL.hostname strips brackets for some hosts but keeps them when a
+    // zone-id is present; normalise either way.
+    let host = rawHost.replace(/^\[|\]$/g, "").toLowerCase();
+    // Strip zone-id suffix (e.g. "::1%lo0" → "::1") — it's a routing hint,
+    // not part of the host identity.
+    const zoneIdx = host.indexOf("%");
+    if (zoneIdx >= 0) host = host.slice(0, zoneIdx);
+    // Trailing dot in FQDN form.
+    if (host.endsWith(".")) host = host.slice(0, -1);
+
+    if (host === "localhost") return true;
+
+    // IPv4 (dotted-quad + shorthand). 127/8 is the loopback block.
+    if (/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.test(host)) {
+        const parts = host.split(".").map(p => parseInt(p, 10));
+        if (parts[0] === 127) return true;
+        if (parts.every(p => p === 0)) return true;
+        return false;
+    }
+    // Bare "0" or "127" → kernel completes to 0.0.0.0 / 127.0.0.1.
+    if (host === "0" || host === "127") return true;
+    // Integer-encoded IPv4: 2130706433 = 127.0.0.1.
+    if (/^\d+$/.test(host)) {
+        const n = parseInt(host, 10);
+        if (!Number.isNaN(n) && n >= 0 && n <= 0xffffffff) {
+            const a = (n >>> 24) & 0xff;
+            if (a === 127 || n === 0) return true;
+        }
+        return false;
+    }
+
+    // IPv6 — accept both compressed (`::1`) and fully-expanded forms.
+    if (host.includes(":")) {
+        // Strip optional `::` short form by expanding to 8 groups.
+        const groups = expandIPv6(host);
+        if (!groups) return false;
+        const allZeroExceptLast = groups.slice(0, 7).every(g => g === 0);
+        if (allZeroExceptLast && groups[7] === 1) return true;
+        // IPv4-mapped IPv6 (`::ffff:7f00:0001` == 127.0.0.1). The first 5
+        // groups are zero, group 5 == 0xffff, and the last two encode the
+        // IPv4 address with the high byte of group 6 being the first octet.
+        if (
+            groups[0] === 0 && groups[1] === 0 && groups[2] === 0 &&
+            groups[3] === 0 && groups[4] === 0 && groups[5] === 0xffff
+        ) {
+            const a = (groups[6] >>> 8) & 0xff;
+            const allZeroV4 = groups[6] === 0 && groups[7] === 0;
+            if (a === 127 || allZeroV4) return true;
+        }
+        return false;
+    }
+
+    return false;
+}
+
+function expandIPv6(host: string): number[] | null {
+    // Split on `::` once. Each side has its own colon-separated groups.
+    const halves = host.split("::");
+    if (halves.length > 2) return null;
+    const parseSide = (s: string): number[] | null => {
+        if (s === "") return [];
+        const parts = s.split(":");
+        const out: number[] = [];
+        for (const p of parts) {
+            if (!/^[0-9a-f]{1,4}$/.test(p)) return null;
+            out.push(parseInt(p, 16));
+        }
+        return out;
+    };
+    const head = parseSide(halves[0]);
+    if (head === null) return null;
+    if (halves.length === 1) return head.length === 8 ? head : null;
+    const tail = parseSide(halves[1]);
+    if (tail === null) return null;
+    const fill = 8 - head.length - tail.length;
+    if (fill < 0) return null;
+    return [...head, ...new Array(fill).fill(0), ...tail];
+}
+
 export async function embedText(
     text: string,
     url: string,
@@ -97,6 +190,11 @@ const EMBED_TIMEOUT_MS = 30000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     let timer: ReturnType<typeof setTimeout>;
+    // Swallow late rejection — if the timeout wins the race, a subsequent
+    // rejection from `promise` would otherwise surface as an unhandled
+    // rejection in the renderer console. Mirrors the same pattern in
+    // OnboardingModal.withTimeout.
+    void promise.catch(() => { /* late rejection swallowed by design */ });
     return Promise.race([
         promise.finally(() => clearTimeout(timer)),
         new Promise<never>((_, reject) => {

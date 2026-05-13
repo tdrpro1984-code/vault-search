@@ -208,6 +208,31 @@ export class SQLiteStore {
         return out;
     }
 
+    /**
+     * Batch load all notes' light projection (path/title/tier/bodyVec) in one
+     * SELECT. Used by Discover / Find Similar to avoid the per-note `getNote()`
+     * SELECT inside hot cosine loops (the diff between this and N×`getNote()`
+     * is roughly 100x on a 10k-vault Discover render).
+     */
+    getAllNotesLight(): Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; bodyVec: Float32Array }> {
+        const res = this.db.exec(
+            'SELECT path, title, tier, body_vec FROM notes WHERE body_vec IS NOT NULL',
+        );
+        if (res.length === 0) return [];
+        const out: Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; bodyVec: Float32Array }> = [];
+        for (const row of res[0].values) {
+            const tierRaw = row[2] as string | null;
+            const tier: 'hot' | 'cold' | null = tierRaw === 'cold' ? 'cold' : tierRaw === 'hot' ? 'hot' : null;
+            out.push({
+                path: row[0] as string,
+                title: (row[1] as string) ?? '',
+                tier,
+                bodyVec: blobToVec(row[3] as Uint8Array),
+            });
+        }
+        return out;
+    }
+
     // ─── BM25 search (pure TypeScript, see bm25.ts for rationale) ─────────────
 
     /**

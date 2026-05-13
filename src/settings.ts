@@ -7,7 +7,7 @@
 import { App, Modal, PluginSettingTab, Setting } from "obsidian";
 import type VaultSearchPlugin from "./main";
 import type { EmbeddingProviderType } from "./types";
-import { fetchOllamaModels, formatLocalDateTime } from "./utils";
+import { fetchOllamaModels, formatLocalDateTime, isLoopbackHost } from "./utils";
 import { t } from "./i18n";
 
 export class VaultSearchSettingTab extends PluginSettingTab {
@@ -42,6 +42,18 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             if (i > 0) descFrag.appendChild(document.createElement("br"));
             descFrag.appendChild(document.createTextNode(lines[i]));
         }
+        // If the backend failed to initialise at onload, the dropdown is
+        // disabled — changing it would swap `this.provider` but
+        // `rebuildIndex` would bail (no indexer), leaving the UI showing a
+        // provider that isn't actually active. Surface that state instead
+        // of letting the user fight a broken dropdown.
+        const backendReady = !!this.plugin.indexer;
+        if (!backendReady) {
+            descFrag.appendChild(document.createElement("br"));
+            const warn = document.createElement("strong");
+            warn.textContent = t.backendNotReady;
+            descFrag.appendChild(warn);
+        }
         providerSetting.setDesc(descFrag);
         providerSetting
             .addDropdown(drop => {
@@ -49,6 +61,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 drop.addOption("ollama", t.embeddingProviderOllama);
                 drop.addOption("openai-compatible", t.embeddingProviderOpenAI);
                 drop.setValue(this.plugin.settings.embeddingProvider);
+                drop.setDisabled(!backendReady);
                 drop.onChange(async (val) => {
                     const newProvider = val as EmbeddingProviderType;
                     const old = this.plugin.settings.embeddingProvider;
@@ -164,6 +177,16 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                     await this.plugin.saveSettings();
                     this.display();
                 });
+            });
+
+        // Production path back to the Onboarding modal — survives a Skip
+        // and doesn't require the dev command.
+        new Setting(parent)
+            .setName(t.rerunOnboarding)
+            .setDesc(t.rerunOnboardingDesc)
+            .addButton(btn => {
+                btn.setButtonText(t.rerunOnboardingBtn);
+                btn.onClick(() => this.plugin.showOnboardingModal());
             });
 
         if (!this.plugin.settings.enableAICuration) return;
@@ -413,7 +436,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
         if (existingHttp) existingHttp.remove();
         try {
             const parsed = new URL(url);
-            const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname);
+            const isLocal = isLoopbackHost(parsed.hostname);
             if (!isLocal) {
                 const warn = setting.settingEl.createDiv({ cls: "vault-search-remote-warn" });
                 warn.setText(t.remoteWarning);
@@ -466,6 +489,8 @@ export class VaultSearchSettingTab extends PluginSettingTab {
 }
 
 class ProviderSwitchModal extends Modal {
+    private decided = false;
+
     constructor(
         app: App,
         private noteCount: number,
@@ -475,35 +500,36 @@ class ProviderSwitchModal extends Modal {
     }
 
     onOpen(): void {
-        let decided = false;
         this.titleEl.setText(t.providerSwitchTitle);
         this.contentEl.createEl("p", { text: t.providerSwitchBody(this.noteCount) });
 
         const btnRow = this.contentEl.createDiv({ cls: "vault-search-modal-btnrow" });
 
         const cancelBtn = btnRow.createEl("button", { text: t.providerSwitchCancel });
-        cancelBtn.addEventListener("click", () => {
-            decided = true;
-            this.onResult(false);
-            this.close();
-        });
+        cancelBtn.addEventListener("click", () => this.resolve(false));
 
         const confirmBtn = btnRow.createEl("button", { text: t.providerSwitchConfirm });
         confirmBtn.addClass("mod-warning");
-        confirmBtn.addEventListener("click", () => {
-            decided = true;
-            this.onResult(true);
-            this.close();
-        });
+        confirmBtn.addEventListener("click", () => this.resolve(true));
 
-        // If user dismisses by clicking outside / Esc, treat as cancel.
-        this.scope.register([], "Escape", () => {
-            if (!decided) this.onResult(false);
-            this.close();
-        });
+        // Esc handler — same path as button cancel. Backdrop click + X are
+        // covered by onClose() so the promise resolves even when the user
+        // dismisses without clicking a button.
+        this.scope.register([], "Escape", () => this.resolve(false));
     }
 
     onClose(): void {
+        // Backdrop / X dismissal arrives here without going through resolve().
+        // Treat as cancel so the caller's promise never hangs and the dropdown
+        // can revert to its prior value.
+        if (!this.decided) this.onResult(false);
         this.contentEl.empty();
+    }
+
+    private resolve(confirmed: boolean): void {
+        if (this.decided) return;
+        this.decided = true;
+        this.onResult(confirmed);
+        this.close();
     }
 }

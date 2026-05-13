@@ -1,15 +1,19 @@
 // Discover (SQLite-backed) — Phase 8 of 004 rebrand.
 //
-// Replaces the legacy in-memory plugin.index path with SQLite body_vec
-// reads. `cosineNormalized` exploits the fact that embeddings are stored
-// L2-normalized (workers/embeddingWorker.ts `normalize: true`), so dot
-// product == cosine similarity directly.
+// Embeddings are L2-normalized at index time, so dot product is cosine
+// similarity. All public functions go through `getAllNotesLight()` —
+// a single SELECT that bundles (path, title, tier, body_vec) — instead
+// of N times `getNote()` inside the candidate loop.
+//
+// `dimGuard()` defends against provider-switch mid-state where the query
+// vector and stored vectors have different dimensions. We warn once per
+// call (not per-vector) so the console doesn't get spammed and silently
+// skip the bad rows.
 
 import type { SQLiteStore } from "../storage/SQLiteStore";
 import type { SearchResult } from "../types";
 
 function cosineNormalized(a: Float32Array, b: Float32Array): number {
-    if (a.length !== b.length) return 0;
     let dot = 0;
     for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
     return dot;
@@ -20,53 +24,58 @@ export interface DiscoverSettings {
     topResults: number;
 }
 
+const YIELD_EVERY = 50;
+
 /**
  * Notes most similar to `currentPath`, with cold notes promoted (the
- * Discover differentiator). Caller is expected to be on the active-file
- * path; mismatched / missing notes return [].
+ * Discover differentiator). Yields to the main thread every 50 candidates
+ * so a 10k-note vault doesn't freeze the sidebar.
  */
-export function discoverForNoteSqlite(
+export async function discoverForNoteSqlite(
     currentPath: string,
     store: SQLiteStore,
     settings: DiscoverSettings,
-): SearchResult[] {
+    cancelled?: { value: boolean },
+): Promise<SearchResult[]> {
     const self = store.getNote(currentPath);
     if (!self || self.bodyVec.length === 0) return [];
 
-    const all = store.getAllBodyVecs();
+    const all = store.getAllNotesLight();
+    const queryDim = self.bodyVec.length;
     const results: SearchResult[] = [];
-    for (const [path, vec] of all) {
-        if (path === currentPath) continue;
-        const score = cosineNormalized(self.bodyVec, vec);
+    let dimMismatchCount = 0;
+
+    for (let i = 0; i < all.length; i++) {
+        if (cancelled?.value) break;
+        const row = all[i];
+        if (row.path === currentPath) continue;
+        if (row.bodyVec.length !== queryDim) {
+            dimMismatchCount++;
+            continue;
+        }
+        const score = cosineNormalized(self.bodyVec, row.bodyVec);
         if (score < settings.minScore) continue;
-        const note = store.getNote(path);
-        if (!note) continue;
         results.push({
-            path,
-            title: note.title,
+            path: row.path,
+            title: row.title,
             tags: [],
             score,
-            tier: note.tier ?? "hot",
+            tier: row.tier ?? "hot",
         });
+        if ((i + 1) % YIELD_EVERY === 0) await new Promise(r => setTimeout(r, 0));
     }
 
-    // First cut by score to keep relevant candidates only.
-    results.sort((a, b) => b.score - a.score);
-    const candidates = results.slice(0, settings.topResults * 2);
+    if (dimMismatchCount > 0) {
+        console.warn(`vault-curate: discoverForNote skipped ${dimMismatchCount} notes with mismatched embedding dim (query=${queryDim}). Provider switched? Re-index to recover.`);
+    }
 
-    // Re-sort: cold first, then by score within each tier — Discover's
-    // "highlight what you haven't explored yet" UX.
-    candidates.sort((a, b) => {
-        if (a.tier !== b.tier) return a.tier === "cold" ? -1 : 1;
-        return b.score - a.score;
-    });
-    return candidates.slice(0, settings.topResults);
+    return rankWithColdPromotion(results, settings.topResults);
 }
 
 /**
  * Cold notes globally ranked by max-pool similarity to the Hot pool.
- * Yields to the main thread every 50 cold notes to keep the UI responsive
- * during the O(|cold| × |hot|) sweep.
+ * Even on cancel, we sort + truncate the partial result so callers
+ * never see an unranked / over-budget list.
  */
 export async function globalDiscoverSqlite(
     store: SQLiteStore,
@@ -74,45 +83,56 @@ export async function globalDiscoverSqlite(
     onProgress?: (done: number, total: number) => void,
     cancelled?: { value: boolean },
 ): Promise<SearchResult[]> {
-    const all = store.getAllBodyVecs();
+    const all = store.getAllNotesLight();
     const hot: Float32Array[] = [];
-    const cold: { path: string; vec: Float32Array }[] = [];
-    for (const [path, vec] of all) {
-        if (vec.length === 0) continue;
-        const note = store.getNote(path);
-        if (!note) continue;
-        if (note.tier === "cold") cold.push({ path, vec });
-        else hot.push(vec);
+    const cold: { path: string; title: string; vec: Float32Array }[] = [];
+    let queryDim = 0;
+
+    for (const row of all) {
+        if (row.bodyVec.length === 0) continue;
+        if (queryDim === 0) queryDim = row.bodyVec.length;
+        if (row.tier === "cold") cold.push({ path: row.path, title: row.title, vec: row.bodyVec });
+        else hot.push(row.bodyVec);
     }
     if (hot.length === 0 || cold.length === 0) return [];
 
     const results: SearchResult[] = [];
+    let dimMismatchCount = 0;
+
     for (let i = 0; i < cold.length; i++) {
-        if (cancelled?.value) return results;
-        const { path, vec } = cold[i];
+        if (cancelled?.value) break;
+        const item = cold[i];
+        if (item.vec.length !== queryDim) {
+            dimMismatchCount++;
+            continue;
+        }
         let max = 0;
         for (const h of hot) {
-            const s = cosineNormalized(vec, h);
+            if (h.length !== queryDim) continue;
+            const s = cosineNormalized(item.vec, h);
             if (s > max) max = s;
         }
         if (max >= settings.minScore) {
-            const note = store.getNote(path);
-            if (note) {
-                results.push({
-                    path,
-                    title: note.title,
-                    tags: [],
-                    score: max,
-                    tier: "cold",
-                });
-            }
+            results.push({
+                path: item.path,
+                title: item.title,
+                tags: [],
+                score: max,
+                tier: "cold",
+            });
         }
-        if ((i + 1) % 50 === 0) {
+        if ((i + 1) % YIELD_EVERY === 0) {
             onProgress?.(i + 1, cold.length);
             await new Promise(r => setTimeout(r, 0));
         }
     }
-    onProgress?.(cold.length, cold.length);
+    // Skip the final "complete" progress callback on cancel — otherwise the
+    // caller flashes "Done" before reacting to its own cancel state.
+    if (!cancelled?.value) onProgress?.(cold.length, cold.length);
+
+    if (dimMismatchCount > 0) {
+        console.warn(`vault-curate: globalDiscover skipped ${dimMismatchCount} notes with mismatched embedding dim. Provider switched? Re-index to recover.`);
+    }
 
     results.sort((a, b) => b.score - a.score);
     return results.slice(0, settings.topResults);
@@ -127,22 +147,42 @@ export function findSimilarSqlite(
     const self = store.getNote(currentPath);
     if (!self || self.bodyVec.length === 0) return [];
 
-    const all = store.getAllBodyVecs();
+    const queryDim = self.bodyVec.length;
+    const all = store.getAllNotesLight();
     const results: SearchResult[] = [];
-    for (const [path, vec] of all) {
-        if (path === currentPath) continue;
-        const score = cosineNormalized(self.bodyVec, vec);
+    let dimMismatchCount = 0;
+
+    for (const row of all) {
+        if (row.path === currentPath) continue;
+        if (row.bodyVec.length !== queryDim) {
+            dimMismatchCount++;
+            continue;
+        }
+        const score = cosineNormalized(self.bodyVec, row.bodyVec);
         if (score < settings.minScore) continue;
-        const note = store.getNote(path);
-        if (!note) continue;
         results.push({
-            path,
-            title: note.title,
+            path: row.path,
+            title: row.title,
             tags: [],
             score,
-            tier: note.tier ?? "hot",
+            tier: row.tier ?? "hot",
         });
     }
+
+    if (dimMismatchCount > 0) {
+        console.warn(`vault-curate: findSimilar skipped ${dimMismatchCount} notes with mismatched embedding dim.`);
+    }
+
     results.sort((a, b) => b.score - a.score);
     return results.slice(0, settings.topResults);
+}
+
+function rankWithColdPromotion(results: SearchResult[], topResults: number): SearchResult[] {
+    results.sort((a, b) => b.score - a.score);
+    const candidates = results.slice(0, topResults * 2);
+    candidates.sort((a, b) => {
+        if (a.tier !== b.tier) return a.tier === "cold" ? -1 : 1;
+        return b.score - a.score;
+    });
+    return candidates.slice(0, topResults);
 }

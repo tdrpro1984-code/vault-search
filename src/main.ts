@@ -221,23 +221,36 @@ export default class VaultSearchPlugin extends Plugin {
         // Settings tab
         this.addSettingTab(new VaultSearchSettingTab(this.app, this));
 
-        // Phase 8 (004 rebrand) first-launch onboarding. `last_indexed_at`
-        // stays empty until the very first rebuild succeeds, so it doubles
-        // as "user has never finished setup" — Migration was descoped (see
-        // tasks.md Phase 9), v0.3.x BRAT upgraders re-install + rebuild
-        // through the same onboarding path.
+        // Phase 8 (004 rebrand) first-launch onboarding. The modal pops
+        // when both signals are absent:
+        //   - last_indexed_at  → set by the indexer on first successful rebuild
+        //   - onboarding_dismissed → set when the user clicks Skip / Esc / X
+        // Either signal alone is enough to stop bouncing the modal each launch.
+        // If store init failed, surface a recovery notice rather than going
+        // silent.
         this.app.workspace.onLayoutReady(() => {
-            if (this.store && !this.store.getMeta("last_indexed_at")) {
+            if (!this.store) {
+                new Notice("vault-curate: backend not ready — reload the plugin or check console.", 10000);
+                return;
+            }
+            const indexed = this.store.getMeta("last_indexed_at");
+            const dismissed = this.store.getMeta("onboarding_dismissed");
+            if (!indexed && !dismissed) {
                 this.showOnboardingModal();
             }
         });
 
-        // Dev command: force-show the onboarding modal for QA. Useful when
-        // dogfooding the UX after the first index has already been built.
+        // Dev command: force-show the onboarding modal for QA. Also clears
+        // the dismissed meta so the next layoutReady will re-show it too —
+        // otherwise users who hit "Skip for now" have no production path
+        // back to onboarding.
         this.addCommand({
             id: "dev-show-onboarding",
             name: "[004 dev] Show onboarding modal",
-            callback: () => this.showOnboardingModal(),
+            callback: () => {
+                this.store?.setMeta("onboarding_dismissed", "");
+                this.showOnboardingModal();
+            },
         });
 
         // ─── Phase 1 (004 rebrand) — Worker boot probe dev command ───
@@ -564,7 +577,10 @@ export default class VaultSearchPlugin extends Plugin {
         console.debug("Vault Search unloaded");
     }
 
-    private showOnboardingModal() {
+    /** Public — also called from Settings → AI Curation → "Re-run onboarding". */
+    showOnboardingModal() {
+        // Clear the dismissed flag so a Skip from this re-run doesn't stick.
+        this.store?.setMeta("onboarding_dismissed", "");
         new OnboardingModal(this.app, this, async (choice) => {
             await applyOnboardingChoice(this, choice);
         }).open();
@@ -603,7 +619,7 @@ export default class VaultSearchPlugin extends Plugin {
             if (!leaf) return;
             const view = leaf.view as SearchView;
             if (view.isDiscoverTabActive()) {
-                view.discoverForFile(file);
+                void view.discoverForFile(file);
             }
         }, 500);
     }
@@ -628,14 +644,25 @@ export default class VaultSearchPlugin extends Plugin {
     async generateDescriptionsForResults(view: SearchView): Promise<void> {
         const results = view.getCurrentResults();
         const targets: TFile[] = [];
+        let skippedNonString = 0;
         for (const r of results) {
             const file = this.app.vault.getAbstractFileByPath(r.path);
             if (!(file instanceof TFile) || file.extension !== "md") continue;
             const cache = this.app.metadataCache.getFileCache(file);
             const desc = cache?.frontmatter?.description;
-            if (!desc || (typeof desc === "string" && desc.trim().length === 0)) {
+            if (desc === undefined || desc === null) {
                 targets.push(file);
+            } else if (typeof desc === "string") {
+                if (desc.trim().length === 0) targets.push(file);
+                // non-empty string description → skip (already curated)
+            } else {
+                // Number, array, object — non-standard. Skip to avoid
+                // overwriting structured data the user might be relying on.
+                skippedNonString++;
             }
+        }
+        if (skippedNonString > 0) {
+            console.warn(`vault-curate: skipped ${skippedNonString} notes whose existing description is not a string (would clobber structured data).`);
         }
         if (targets.length === 0) {
             new Notice(t.descNoEligible);
@@ -856,7 +883,11 @@ export default class VaultSearchPlugin extends Plugin {
         const oldProvider = this.provider;
         const newProvider = await this.buildProvider();
         this.provider = newProvider;
-        if (this.store) {
+        // `this.indexer` is undefined when the original backend init failed
+        // (try/catch in onload). Skip the setBackends call so reloadBackends
+        // doesn't throw before the user has a chance to fix the underlying
+        // issue and reload the plugin.
+        if (this.store && this.indexer) {
             this.indexer.setBackends(this.store, newProvider);
         }
         oldProvider?.dispose();
@@ -921,7 +952,18 @@ export default class VaultSearchPlugin extends Plugin {
     }
 
     async loadSettings() {
-        const data = await this.loadData() as Partial<VaultSearchData> | null;
+        const raw = await this.loadData();
+        // data.json should always parse to an object. If a user (or a tool
+        // crash) left it in a non-object shape, back the broken file up so
+        // they can inspect it instead of silently overwriting on the next
+        // saveData, then fall back to defaults.
+        if (raw !== null && (typeof raw !== "object" || Array.isArray(raw))) {
+            console.warn("vault-curate: data.json is not an object — using defaults. Got:", typeof raw);
+            await this.backupCorruptDataJson(raw);
+        }
+        const data = (raw && typeof raw === "object" && !Array.isArray(raw))
+            ? raw as Partial<VaultSearchData>
+            : null;
         this.settings = Object.assign({}, DEFAULT_SETTINGS, data?.settings);
 
         // Phase 4 (004 rebrand) chunk tuning migration: v0.3 default 1000/200
@@ -945,5 +987,25 @@ export default class VaultSearchPlugin extends Plugin {
 
     async saveSettings() {
         await this.saveData({ settings: this.settings } as VaultSearchData);
+    }
+
+    /** Snapshot a malformed data.json before defaults overwrite it. Best-effort. */
+    private async backupCorruptDataJson(raw: unknown): Promise<void> {
+        try {
+            const dir = this.manifest.dir;
+            if (!dir) return;
+            const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+            // 6-char random suffix so two corrupt loads in the same ms (or
+            // a manifest.dir-undefined retry loop) don't overwrite each
+            // other's evidence. Math.random is enough — this is forensics,
+            // not crypto.
+            const rand = Math.random().toString(36).slice(2, 8);
+            const path = normalizePath(`${dir}/data.corrupt-${stamp}-${rand}.json`);
+            const payload = typeof raw === "string" ? raw : JSON.stringify(raw, null, 2);
+            await this.app.vault.adapter.write(path, payload);
+            console.warn(`vault-curate: backed up corrupt data.json to ${path}`);
+        } catch (err) {
+            console.warn("vault-curate: failed to back up corrupt data.json", err);
+        }
     }
 }

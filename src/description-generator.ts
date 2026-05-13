@@ -12,8 +12,46 @@ import { checkOllama, requestLlmJson, stripFrontmatter } from "./utils";
 import { t } from "./i18n";
 
 const BODY_CAP = 2000;
+const DESCRIPTION_LENGTH_CAP = 500;
+const TAG_LENGTH_CAP = 64;
+
+/**
+ * Match every control / line-break code point that YAML or downstream
+ * UI rendering might choke on, BUT preserve common whitespace
+ * (\x09 tab, \x0a LF, \x0d CR) so multi-line markdown descriptions
+ * survive intact. Covers:
+ *   C0       (\x00-\x08, \x0b-\x0c, \x0e-\x1f — NUL etc., minus \t \n \r)
+ *   DEL      (\x7f)
+ *   C1       (\x80-\x9f - rarely seen but YAML 1.2 line breaks)
+ *   LS / PS  (\u2028 / \u2029 - line/paragraph separator)
+ *
+ * Built via RegExp constructor with concatenated escape strings so the
+ * source file stays plain ASCII (Edit/Write tools decode raw \uXXXX in
+ * regex literals, which corrupted earlier versions).
+ */
+const STRIP_CONTROL_CHARS = new RegExp(
+    "[" + "\\x00-\\x08" + "\\x0b\\x0c" + "\\x0e-\\x1f"
+        + "\\x7f-\\x9f" + "\\u2028\\u2029" + "]",
+    "g",
+);
+
+/** Slice text safely without splitting a UTF-16 surrogate pair. */
+function safeSlice(text: string, max: number): string {
+    if (max <= 0) return "";
+    if (text.length <= max) return text;
+    let cut = max;
+    // If we landed on a high surrogate, back off one code unit.
+    const code = text.charCodeAt(cut - 1);
+    if (code >= 0xd800 && code <= 0xdbff) cut--;
+    return text.slice(0, cut);
+}
 
 export class DescriptionGenerator {
+    /** In-flight set keyed by file path — prevents duplicate LLM calls for the
+     *  same note when a user double-clicks the sidebar button or simultaneously
+     *  triggers the file-menu and palette command. */
+    private inflight = new Set<string>();
+
     constructor(private plugin: VaultSearchPlugin) {}
 
     /** True when settings have a usable LLM endpoint + model configured. */
@@ -65,22 +103,44 @@ export class DescriptionGenerator {
 
     /** Core path: build prompt → call LLM → merge frontmatter. */
     private async runOne(file: TFile, silent = false): Promise<boolean> {
-        const { ollamaUrl, llmModel } = this.plugin.settings;
-        const title = this.extractTitle(file);
-        const body = stripFrontmatter(await this.plugin.app.vault.cachedRead(file)).slice(0, BODY_CAP);
-        const cache = this.plugin.app.metadataCache.getFileCache(file);
-        const existingTags: string[] = (() => {
-            const raw = cache?.frontmatter?.tags;
-            if (Array.isArray(raw)) return raw.map(String);
-            if (typeof raw === "string") return raw.split(",").map(s => s.trim()).filter(Boolean);
-            return [];
-        })();
+        // Per-file in-flight guard — second invocation while LLM is running
+        // returns immediately so the user can't accidentally fire two writes.
+        // The Set entry is added INSIDE the try block (after the has-check)
+        // so an early throw from cachedRead / extractTitle still hits the
+        // finally cleanup — otherwise the path would leak and block all
+        // future retries until plugin reload.
+        if (this.inflight.has(file.path)) {
+            if (!silent) new Notice(t.descGeneratingOne(file.basename), 3000);
+            return false;
+        }
 
-        // Show a live progress notice in single-note mode (batch mode handles
-        // its own progress). qwen3:1.7b round-trip is 4-8s — silence feels broken.
+        // Progress notice declared outside the try so finally can hide it
+        // even if Notice construction throws before the inner try.
         const progress = silent ? null : new Notice(t.descGeneratingOne(file.basename), 0);
 
         try {
+            // inflight.add lives INSIDE try so any throw from cachedRead /
+            // extractTitle / metadata calls still hits the finally cleanup
+            // and the path doesn't leak permanently in the Set.
+            this.inflight.add(file.path);
+            const { ollamaUrl, llmModel } = this.plugin.settings;
+            const title = this.extractTitle(file);
+            const rawBody = stripFrontmatter(await this.plugin.app.vault.cachedRead(file));
+            // Slice on UTF-16 code units but never split a surrogate pair —
+            // emoji-heavy notes would otherwise feed invalid UTF-16 to the LLM.
+            const body = safeSlice(rawBody, BODY_CAP);
+            const cache = this.plugin.app.metadataCache.getFileCache(file);
+            const existingTagsRaw = cache?.frontmatter?.tags;
+            const existingTags: string[] = Array.isArray(existingTagsRaw)
+                ? existingTagsRaw.map(String)
+                : typeof existingTagsRaw === "string"
+                    ? existingTagsRaw.split(",").map(s => s.trim()).filter(Boolean)
+                    : [];
+            const existingTagsUnknownShape = existingTagsRaw !== undefined
+                && existingTagsRaw !== null
+                && !Array.isArray(existingTagsRaw)
+                && typeof existingTagsRaw !== "string";
+
             let result: { description: string; tags?: string[] };
             try {
                 result = await this.callLLM(ollamaUrl, llmModel, title, body);
@@ -116,11 +176,15 @@ export class DescriptionGenerator {
             }
 
             const mergedTags = this.mergeTags(existingTags, result.tags);
+            const finalDescription = safeSlice(description, DESCRIPTION_LENGTH_CAP);
 
             try {
                 await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
-                    fm.description = description;
-                    if (mergedTags) fm.tags = mergedTags;
+                    fm.description = finalDescription;
+                    // If tags came back as a non-array, non-string shape
+                    // (number, object, etc.), don't overwrite — keep what's
+                    // there so we don't silently destroy structured data.
+                    if (mergedTags && !existingTagsUnknownShape) fm.tags = mergedTags;
                     if (!fm.title) fm.title = title;
                 });
             } catch (e) {
@@ -133,6 +197,7 @@ export class DescriptionGenerator {
             return true;
         } finally {
             progress?.hide();
+            this.inflight.delete(file.path);
         }
     }
 
@@ -143,17 +208,19 @@ export class DescriptionGenerator {
             ?? cache?.headings?.find(h => h.level === 1)?.heading
             ?? file.basename,
         );
-        // Strip wikilink syntax (defense against historical bad data).
-        if (raw.startsWith("[[") && raw.endsWith("]]")) {
-            raw = raw.slice(2, -2);
-            const pipe = raw.indexOf("|");
-            if (pipe >= 0) raw = raw.slice(pipe + 1);
-            else {
-                const slash = raw.lastIndexOf("/");
-                if (slash >= 0) raw = raw.slice(slash + 1);
-            }
-        }
-        return raw;
+        // Strip wikilink syntax wherever it appears — `[[foo]]`, `[[foo|bar]]`,
+        // and embedded forms like `[[foo]] suffix`. Earlier versions only
+        // stripped if the *whole* title was a wikilink, missing prefix/suffix cases.
+        raw = raw.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, alias) => {
+            const text = String(alias ?? target);
+            const slash = text.lastIndexOf("/");
+            return slash >= 0 ? text.slice(slash + 1) : text;
+        });
+        // Defang YAML-breaking characters before we ever consider writing this
+        // into frontmatter (processFrontMatter quotes most things, but explicit
+        // sanitisation here keeps the round-trip predictable).
+        raw = raw.replace(STRIP_CONTROL_CHARS, " ").replace(/---/g, "—");
+        return raw.trim();
     }
 
     private mergeTags(existing: string[], generated: string[] | undefined): string[] | null {
@@ -186,11 +253,17 @@ export class DescriptionGenerator {
         const tryParse = (text: string): { description: string; tags?: string[] } | null => {
             try {
                 const parsed = JSON.parse(text);
-                const desc = (parsed.description ?? parsed.summary ?? "").slice(0, 500);
+                const descRaw = String(parsed.description ?? parsed.summary ?? "");
+                // Strip control + C1 + line-separator code points before any
+                // further use — a poisoned LLM response could otherwise smuggle
+                // ANSI escapes, YAML-confusing line breaks, or invisible chars
+                // into frontmatter.
+                const desc = safeSlice(descRaw.replace(STRIP_CONTROL_CHARS, " "), DESCRIPTION_LENGTH_CAP);
                 const tags = Array.isArray(parsed.tags)
                     ? parsed.tags
                         .map(String)
-                        .map((s: string) => s.replace(/\s+/g, "_"))
+                        .map((s: string) => s.replace(STRIP_CONTROL_CHARS, "").replace(/\s+/g, "_"))
+                        .map((s: string) => safeSlice(s, TAG_LENGTH_CAP))
                         .filter((s: string) => s !== "..." && s !== "…" && s.length > 0)
                     : undefined;
                 return { description: desc, tags };
@@ -199,6 +272,6 @@ export class DescriptionGenerator {
 
         return tryParse(raw)
             ?? tryParse(raw.replace(/```json\n?|\n?```/g, "").trim())
-            ?? { description: raw.slice(0, 200) };
+            ?? { description: safeSlice(raw, 200) };
     }
 }

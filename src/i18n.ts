@@ -134,6 +134,11 @@ export interface Locale {
     onboardingAIRequiresLlm: string;
     onboardingIndexNow: string;
     onboardingLater: string;
+    backendNotReady: string;
+    rerunOnboarding: string;
+    rerunOnboardingDesc: string;
+    rerunOnboardingBtn: string;
+    dimMismatchNotice: (skipped: number) => string;
     // Notices
     noticeIndexEmpty: string;
     noticeIndexing: (done: number, total: number) => string;
@@ -306,6 +311,12 @@ const en: Locale = {
     onboardingAIRequiresLlm: "AI curation needs an Ollama or OpenAI-compatible LLM endpoint.",
     onboardingIndexNow: "Index my vault now",
     onboardingLater: "Skip for now",
+    backendNotReady: "Backend not ready — reload the plugin (check console for the init error).",
+    rerunOnboarding: "Re-run onboarding",
+    rerunOnboardingDesc: "Reopen the first-launch setup modal — useful if you dismissed it earlier and want to revisit provider / AI curation choices.",
+    rerunOnboardingBtn: "Open onboarding",
+    dimMismatchNotice: (skipped) =>
+        `${skipped} notes have a different embedding dimension than the current model. Run "Rebuild index" to recover.`,
     noticeIndexEmpty: "Vault Search: Index is empty. Run 'Rebuild index' first",
     noticeIndexing: (done, total) => `Vault Search: Indexing ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
@@ -501,6 +512,12 @@ const zhTW: Locale = {
     onboardingAIRequiresLlm: "AI 整理需要 Ollama 或 OpenAI-compatible LLM endpoint。",
     onboardingIndexNow: "現在開始建立索引",
     onboardingLater: "稍後再說",
+    backendNotReady: "後端未就緒 — 請重新載入 plugin（檢查 console 看初始化錯誤）。",
+    rerunOnboarding: "重新執行 Onboarding",
+    rerunOnboardingDesc: "重新打開首次啟動設定視窗 — 若之前 dismiss 了想重新選 provider / AI 整理，可從這裡進。",
+    rerunOnboardingBtn: "開啟 Onboarding",
+    dimMismatchNotice: (skipped) =>
+        `${skipped} 篇筆記的 embedding 維度與當前模型不符。請執行「重建索引」修復。`,
     noticeIndexEmpty: "Vault Search：索引為空，請先執行「重建索引」",
     noticeIndexing: (done, total) => `Vault Search：索引中 ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
