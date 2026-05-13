@@ -1,4 +1,5 @@
 import { normalizePath, Notice, Plugin, TFile } from "obsidian";
+import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import {
     VaultSearchData,
     VaultSearchDataLegacy,
@@ -144,7 +145,129 @@ export default class VaultSearchPlugin extends Plugin {
             callback: () => void this.dev004WorkerProbe(),
         });
 
+        // ─── Phase 2 (004 rebrand) — SQLite storage probe dev command ───
+        // Verifies sql.js + FTS5 + Float32Array round-trip in Obsidian Electron.
+        this.addCommand({
+            id: "dev-sqlite-probe",
+            name: "[004 dev] Phase 2 SQLite probe",
+            callback: () => void this.dev004SqliteProbe(),
+        });
+
         console.debug("Vault Search loaded");
+    }
+
+    /**
+     * Phase 2 dogfood: open SQLite db, write a synthetic note + chunks, query via FTS5
+     * (with CJK trigram tokenisation), verify Float32Array round-trip.
+     */
+    private async dev004SqliteProbe(): Promise<void> {
+        const log = (msg: string) => console.log("[004 sqlite-probe]", msg);
+        try {
+            const manifestDir = this.manifest.dir;
+            if (!manifestDir) {
+                new Notice("[004 sqlite-probe] manifest.dir is undefined");
+                return;
+            }
+            const dbPath = normalizePath(`${manifestDir}/dev-probe.sqlite`);
+            // Wipe previous probe artifact for a clean run.
+            if (await this.app.vault.adapter.exists(dbPath)) {
+                await this.app.vault.adapter.remove(dbPath);
+            }
+
+            const adapter: PersistAdapter = {
+                read: async (path) => {
+                    const exists = await this.app.vault.adapter.exists(path);
+                    if (!exists) return null;
+                    const buf = await this.app.vault.adapter.readBinary(path);
+                    return new Uint8Array(buf);
+                },
+                write: async (path, bytes) => {
+                    const ab = bytes.buffer.slice(
+                        bytes.byteOffset,
+                        bytes.byteOffset + bytes.byteLength,
+                    ) as ArrayBuffer;
+                    await this.app.vault.adapter.writeBinary(path, ab);
+                },
+                exists: (path) => this.app.vault.adapter.exists(path),
+            };
+
+            log(`opening db at ${dbPath}`);
+            const store = await SQLiteStore.open(adapter, dbPath);
+
+            // schema_version should be auto-set on first open
+            const ver = store.getMeta("schema_version");
+            log(`schema_version = ${ver}`);
+            if (ver !== "1") throw new Error(`expected schema_version '1', got ${ver}`);
+
+            // Round-trip a note with a 768-dim vector
+            const dim = 768;
+            const bodyVec = new Float32Array(dim);
+            for (let i = 0; i < dim; i++) bodyVec[i] = Math.sin(i / 50);
+            store.upsertNote({
+                path: "probe/test.md",
+                mtime: Date.now(),
+                title: "主公的測試筆記",
+                description: "測試 SQLite 是否能存中文 description",
+                tier: "hot",
+                bodyVec,
+                bodyDim: dim,
+                indexedAt: Date.now(),
+            });
+            const got = store.getNote("probe/test.md");
+            if (!got) throw new Error("getNote returned null");
+            if (got.title !== "主公的測試筆記") {
+                throw new Error(`title mismatch: ${got.title}`);
+            }
+            if (got.bodyVec.length !== dim) {
+                throw new Error(`bodyVec.length = ${got.bodyVec.length}`);
+            }
+            // Sample a few values
+            for (let i = 0; i < 10; i++) {
+                if (Math.abs(got.bodyVec[i] - bodyVec[i]) > 1e-6) {
+                    throw new Error(`vec[${i}] mismatch: ${got.bodyVec[i]} vs ${bodyVec[i]}`);
+                }
+            }
+            log("note round-trip OK");
+
+            // Round-trip chunks + FTS5 BM25 search
+            const chunks = [
+                { notePath: "probe/test.md", chunkIndex: 0, content: "主公在 Obsidian 寫關於 LLM 的筆記", vec: bodyVec },
+                { notePath: "probe/test.md", chunkIndex: 1, content: "今天測試 sql.js 的 FTS5 中文 trigram", vec: bodyVec },
+            ];
+            store.upsertChunks("probe/test.md", chunks);
+            log(`inserted ${chunks.length} chunks + FTS rows`);
+
+            // Search for a CJK term (raw query; searchBM25 tokenises internally)
+            const q1 = "LLM 筆記";
+            const hits1 = store.searchBM25(q1, 10);
+            log(`bm25('${q1}') -> ${hits1.length} hits: ${JSON.stringify(hits1)}`);
+            if (hits1.length === 0) throw new Error("expected at least 1 BM25 hit for 'LLM 筆記'");
+
+            // Search for ASCII term
+            const q2 = "sql.js";
+            const hits2 = store.searchBM25(q2, 10);
+            log(`bm25('${q2}') -> ${hits2.length} hits: ${JSON.stringify(hits2)}`);
+
+            // Verify getAllBodyVecs + getAllTitles
+            const allBody = store.getAllBodyVecs();
+            const allTitles = store.getAllTitles();
+            log(`allBodyVecs size = ${allBody.size}, allTitles size = ${allTitles.size}`);
+
+            await store.flush();
+            log(`flushed; file exists = ${await adapter.exists(dbPath)}`);
+
+            // Clean up
+            await store.dispose();
+            await this.app.vault.adapter.remove(dbPath);
+
+            new Notice(
+                `[004 sqlite-probe] ✅ schema v${ver}, note round-trip OK, BM25 hits = ${hits1.length} + ${hits2.length}`,
+            );
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            new Notice(`[004 sqlite-probe] ❌ ${msg}`);
+            console.error("[004 sqlite-probe]", err);
+        }
     }
 
     /** Phase 1 dogfood: load worker.js from plugin folder, spawn Web Worker, expect 'ready'. */
