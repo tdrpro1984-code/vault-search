@@ -175,21 +175,6 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
-        // Chunking
-        new Setting(containerEl)
-            .setName(t.chunkingMode)
-            .setDesc(t.chunkingModeDesc)
-            .addDropdown(drop => {
-                drop.addOption("off", t.chunkingOff);
-                drop.addOption("smart", t.chunkingSmart);
-                drop.addOption("all", t.chunkingAll);
-                drop.setValue(this.plugin.settings.chunkingMode);
-                drop.onChange(async (val) => {
-                    this.plugin.settings.chunkingMode = val as "off" | "smart" | "all";
-                    await this.plugin.saveSettings();
-                });
-            });
-
         new Setting(containerEl)
             .setName(t.chunkSize)
             .setDesc(t.chunkSizeDesc)
@@ -282,8 +267,19 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             stats.createEl("p", { text: `${t.lastIndexed}: ${localTime}` });
         }
 
-        // Section 2: Description Generator
-        new Setting(containerEl).setName(t.sectionDesc).setHeading();
+        // Section 2: AI Curation (Phase 6/7 — gates description + topic-grouped MOC)
+        new Setting(containerEl).setName(t.sectionAICuration).setHeading();
+
+        new Setting(containerEl)
+            .setName(t.enableAICuration)
+            .setDesc(t.enableAICurationDesc)
+            .addToggle(toggle => {
+                toggle.setValue(this.plugin.settings.enableAICuration);
+                toggle.onChange(async (val) => {
+                    this.plugin.settings.enableAICuration = val;
+                    await this.plugin.saveSettings();
+                });
+            });
 
         const llmSetting = new Setting(containerEl)
             .setName(t.llmModel)
@@ -292,64 +288,6 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             this.plugin.settings.llmModel = val;
             await this.plugin.saveSettings();
         }, "llm");
-
-        new Setting(containerEl)
-            .setName(t.minDescLength)
-            .setDesc(t.minDescLengthDesc)
-            .addText(text => {
-                text.setValue(String(this.plugin.settings.minDescLength));
-                text.onChange(async (val) => {
-                    const n = parseInt(val, 10);
-                    if (!isNaN(n) && n > 0) {
-                        this.plugin.settings.minDescLength = n;
-                        await this.plugin.saveSettings();
-                    }
-                });
-            });
-
-        // Description actions
-        new Setting(containerEl).setName(t.actions).setHeading();
-
-        new Setting(containerEl)
-            .setName(t.cmdDescPreview)
-            .setDesc(t.descPreviewDesc)
-            .addButton(btn => {
-                btn.setButtonText(t.previewBtn);
-                btn.setCta();
-                btn.onClick(async () => {
-                    btn.setDisabled(true);
-                    btn.setButtonText(t.previewingBtn);
-                    await this.plugin.descGenerator.preview();
-                    btn.setDisabled(false);
-                    btn.setButtonText(t.previewBtn);
-                    this.display();
-                });
-            });
-
-        new Setting(containerEl)
-            .setName(t.cmdDescApply)
-            .setDesc(t.descApplyDesc)
-            .addButton(btn => {
-                btn.setButtonText(t.applyBtn);
-                btn.onClick(async () => {
-                    btn.setDisabled(true);
-                    btn.setButtonText(t.applyingBtn);
-                    await this.plugin.descGenerator.apply();
-                    btn.setDisabled(false);
-                    btn.setButtonText(t.applyBtn);
-                    this.display();
-                });
-            });
-
-        // Description stats
-        const descStats = this.plugin.descGenerator.getStats();
-        new Setting(containerEl).setName(t.descStats).setHeading();
-        const dStatsEl = containerEl.createDiv({ cls: "vault-search-stats" });
-        dStatsEl.createEl("p", { text: `${t.totalNotes}: ${descStats.total}` });
-        dStatsEl.createEl("p", { text: `${t.descGood}: ${descStats.good}` });
-        dStatsEl.createEl("p", { text: `${t.descShort}: ${descStats.short}` });
-        dStatsEl.createEl("p", { text: `${t.descMissing}: ${descStats.missing}` });
-        dStatsEl.createEl("p", { text: `${t.descNoFm}: ${descStats.noFrontmatter}` });
 
         // Async: populate model dropdowns
         void this.loadModelOptions();

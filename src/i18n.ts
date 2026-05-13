@@ -26,19 +26,14 @@ export interface Locale {
     autoIndexDesc: string;
     synonymsLabel: string;
     synonymsDesc: string;
-    chunkingMode: string;
-    chunkingModeDesc: string;
-    chunkingOff: string;
-    chunkingSmart: string;
-    chunkingAll: string;
     chunkSize: string;
     chunkSizeDesc: string;
     chunkOverlap: string;
     chunkOverlapDesc: string;
     llmModel: string;
     llmModelDesc: string;
-    minDescLength: string;
-    minDescLengthDesc: string;
+    enableAICuration: string;
+    enableAICurationDesc: string;
     actions: string;
     rebuildIndex: string;
     rebuildIndexDesc: string;
@@ -67,21 +62,22 @@ export interface Locale {
     cmdFindSimilar: string;
     cmdRebuild: string;
     cmdUpdate: string;
-    cmdDescPreview: string;
-    cmdDescApply: string;
+    cmdDescActive: string;
+    cmdDescSelected: string;
+    menuDescGenerate: string;
     ollamaNotReady: string;
     noSimilar: string;
     notIndexed: string;
     similarTo: (title: string) => string;
-    descPreviewDone: (total: number, gen: number, rewrite: number, skeleton: number, skip: number) => string;
-    descApplyDone: (n: number) => string;
-    descNoReport: string;
+    descNoLlmConfigured: string;
     descGenerating: (done: number, total: number) => string;
-    descAllGood: string;
-    descNoEntries: string;
-    descApplying: (done: number, total: number) => string;
-    descResuming: (done: number, remaining: number) => string;
-    chunkingProgress: (done: number, total: number) => string;
+    descGeneratingOne: (name: string) => string;
+    descGeneratedOne: (name: string) => string;
+    descBatchDone: (ok: number, failed: number) => string;
+    descLlmFailed: (name: string) => string;
+    descNoEligible: string;
+    descAICurationOff: string;
+    descOpenSidebarFirst: string;
     apiKeyLabel: string;
     apiKeyDesc: string;
     urlPlaceholder: string;
@@ -108,18 +104,7 @@ export interface Locale {
     scopeCold: string;
     // Settings sections
     sectionSearch: string;
-    sectionDesc: string;
-    descStats: string;
-    descGood: string;
-    descShort: string;
-    descMissing: string;
-    descNoFm: string;
-    descPreviewDesc: string;
-    descApplyDesc: string;
-    previewBtn: string;
-    previewingBtn: string;
-    applyBtn: string;
-    applyingBtn: string;
+    sectionAICuration: string;
     // Notices
     noticeIndexEmpty: string;
     noticeIndexing: (done: number, total: number) => string;
@@ -183,11 +168,6 @@ const en: Locale = {
     excludePatternsDesc: "Folder prefixes to exclude from indexing and Discover (one per line, e.g. 3_wiki/)",
     autoIndex: "Auto-index on change",
     autoIndexDesc: "Automatically re-embed notes when modified. Keeps Discover results fresh.",
-    chunkingMode: "Chunking mode",
-    chunkingModeDesc: "Split long notes into overlapping chunks for better search on long documents",
-    chunkingOff: "Off",
-    chunkingSmart: "Smart (skip notes with description)",
-    chunkingAll: "All notes",
     chunkSize: "Chunk size",
     chunkSizeDesc: "Characters per chunk (rebuild index after changing)",
     chunkOverlap: "Chunk overlap",
@@ -195,9 +175,9 @@ const en: Locale = {
     synonymsLabel: "Synonyms",
     synonymsDesc: "One per line: keyword = synonym1, synonym2",
     llmModel: "LLM model",
-    llmModelDesc: "Ollama model for generating descriptions. Recommended: qwen3:1.7b (fast, good quality).",
-    minDescLength: "Min description length",
-    minDescLengthDesc: "Descriptions shorter than this are rewritten. Good descriptions improve both search accuracy and Discover results.",
+    llmModelDesc: "Ollama model for AI curation (description / MOC naming). Recommended: qwen3:1.7b.",
+    enableAICuration: "Enable AI curation",
+    enableAICurationDesc: "When on, expose Description generation and topic-grouped MOC commands. Requires an LLM provider.",
     actions: "Actions",
     rebuildIndex: "Rebuild index",
     rebuildIndexDesc: "Re-embed all notes from scratch. Required after adding many new files or changing embedding model.",
@@ -224,22 +204,24 @@ const en: Locale = {
     cmdFindSimilar: "Find similar notes",
     cmdRebuild: "Rebuild index",
     cmdUpdate: "Update index",
-    cmdDescPreview: "Generate descriptions (preview)",
-    cmdDescApply: "Apply descriptions",
+    cmdDescActive: "Generate description for active note",
+    cmdDescSelected: "Generate descriptions for current results",
+    menuDescGenerate: "Generate description",
     ollamaNotReady: "Cannot connect to Ollama. Please ensure Ollama is running.",
     noSimilar: "No similar notes found",
     notIndexed: "This note is not indexed",
     similarTo: (title) => `Similar to: ${title}`,
-    descPreviewDone: (total, gen, rewrite, skeleton, skip) =>
-        `Preview complete: ${total} notes scanned — ${gen} new, ${rewrite} rewrite, ${skeleton} skeleton, ${skip} skipped`,
-    descApplyDone: (n) => `Applied descriptions to ${n} notes`,
-    descNoReport: "No preview report found. Run 'Generate descriptions (preview)' first.",
+    descNoLlmConfigured: "LLM not configured. Set the LLM model in Settings first.",
     descGenerating: (done, total) => `Generating descriptions: ${done}/${total}...`,
-    descAllGood: "All notes already have good descriptions",
-    descNoEntries: "No entries to apply",
-    descApplying: (done, total) => `Applying: ${done}/${total}...`,
-    descResuming: (done, remaining) => `Resuming: ${done} already done, ${remaining} remaining`,
-    chunkingProgress: (done, total) => `Chunking: ${done}/${total}...`,
+    descGeneratingOne: (name) => `Generating description for ${name}...`,
+    descGeneratedOne: (name) => `Description added to ${name}`,
+    descBatchDone: (ok, failed) => failed > 0
+        ? `Done — ${ok} notes, ${failed} failed`
+        : `Done — ${ok} notes`,
+    descLlmFailed: (name) => `LLM failed for ${name}`,
+    descNoEligible: "No notes without a description in the current selection.",
+    descAICurationOff: "AI curation is disabled. Enable it in Settings to use this command.",
+    descOpenSidebarFirst: "Open the Vault Curate panel and run a search first.",
     apiKeyLabel: "API key",
     apiKeyDesc: "Optional — for servers that require authentication",
     urlPlaceholder: "http://localhost:11434",
@@ -264,18 +246,7 @@ const en: Locale = {
     cmdGlobalDiscover: "Discover related Cold notes",
     scopeCold: "Cold only",
     sectionSearch: "Search & index",
-    sectionDesc: "Description generator",
-    descStats: "Description stats",
-    descGood: "Good",
-    descShort: "Too short",
-    descMissing: "Missing",
-    descNoFm: "No frontmatter",
-    descPreviewDesc: "Scan all notes and generate descriptions for those missing or too short. Creates a preview report.",
-    descApplyDesc: "Write previewed descriptions into note frontmatter.",
-    previewBtn: "Preview",
-    previewingBtn: "Generating...",
-    applyBtn: "Apply",
-    applyingBtn: "Applying...",
+    sectionAICuration: "AI curation",
     noticeIndexEmpty: "Vault Search: Index is empty. Run 'Rebuild index' first",
     noticeIndexing: (done, total) => `Vault Search: Indexing ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
@@ -362,11 +333,6 @@ const zhTW: Locale = {
     excludePatternsDesc: "不索引也不 Discover 的資料夾前綴（每行一個，例如 3_wiki/）",
     autoIndex: "自動更新索引",
     autoIndexDesc: "筆記修改時自動重新 embed，保持 Discover 結果即時。",
-    chunkingMode: "Chunking 模式",
-    chunkingModeDesc: "將長文切成重疊片段，提升長文搜尋品質",
-    chunkingOff: "關閉",
-    chunkingSmart: "智慧（有 description 的跳過）",
-    chunkingAll: "全部筆記",
     chunkSize: "Chunk 大小",
     chunkSizeDesc: "每個 chunk 的字數（修改後需重建索引）",
     chunkOverlap: "Chunk 重疊",
@@ -374,9 +340,9 @@ const zhTW: Locale = {
     synonymsLabel: "同義詞",
     synonymsDesc: "每行一組：關鍵字 = 同義詞1, 同義詞2",
     llmModel: "LLM 模型",
-    llmModelDesc: "用於生成 description 的 Ollama 模型。推薦：qwen3:1.7b（快速、品質好）。",
-    minDescLength: "最短 description 字數",
-    minDescLengthDesc: "低於此字數的 description 會重新生成。好的 description 能提升搜尋和 Discover 的準確度。",
+    llmModelDesc: "AI 整理（description / MOC 群組命名）使用的 Ollama 模型。推薦：qwen3:1.7b。",
+    enableAICuration: "啟用 AI 整理",
+    enableAICurationDesc: "開啟後才會出現 Description 生成與主題分群 MOC 等指令。需要設定 LLM 提供者。",
     actions: "操作",
     rebuildIndex: "重建索引",
     rebuildIndexDesc: "全部重新 embed。大量新增檔案或更換 embedding 模型後需要執行。",
@@ -403,22 +369,24 @@ const zhTW: Locale = {
     cmdFindSimilar: "尋找相似筆記",
     cmdRebuild: "重建索引",
     cmdUpdate: "更新索引",
-    cmdDescPreview: "生成 description（預覽）",
-    cmdDescApply: "套用 description",
+    cmdDescActive: "為當前筆記生成 description",
+    cmdDescSelected: "為目前結果生成 description",
+    menuDescGenerate: "生成 description",
     ollamaNotReady: "無法連線 Ollama，請確認 Ollama 已啟動",
     noSimilar: "找不到相似筆記",
     notIndexed: "此筆記尚未索引",
     similarTo: (title) => `與「${title}」相似`,
-    descPreviewDone: (total, gen, rewrite, skeleton, skip) =>
-        `預覽完成：掃描 ${total} 篇 — ${gen} 篇新增、${rewrite} 篇重寫、${skeleton} 篇建骨架、${skip} 篇跳過`,
-    descApplyDone: (n) => `已套用 ${n} 篇 description`,
-    descNoReport: "找不到預覽報告，請先執行「生成 description（預覽）」",
+    descNoLlmConfigured: "尚未設定 LLM，請先在設定中指定 LLM 模型。",
     descGenerating: (done, total) => `生成 description：${done}/${total}...`,
-    descAllGood: "所有筆記都已有完整 description",
-    descNoEntries: "沒有需要套用的項目",
-    descApplying: (done, total) => `套用中：${done}/${total}...`,
-    descResuming: (done, remaining) => `繼續生成：已完成 ${done} 篇，剩餘 ${remaining} 篇`,
-    chunkingProgress: (done, total) => `Chunking：${done}/${total}...`,
+    descGeneratingOne: (name) => `正在為 ${name} 生成 description…`,
+    descGeneratedOne: (name) => `已為 ${name} 寫入 description`,
+    descBatchDone: (ok, failed) => failed > 0
+        ? `完成 — ${ok} 篇成功、${failed} 篇失敗`
+        : `完成 — ${ok} 篇`,
+    descLlmFailed: (name) => `LLM 對 ${name} 生成失敗`,
+    descNoEligible: "目前結果中沒有缺少 description 的筆記。",
+    descAICurationOff: "AI 整理尚未啟用。請到設定開啟後再使用此指令。",
+    descOpenSidebarFirst: "請先開啟 Vault Curate 面板並執行搜尋。",
     apiKeyLabel: "API key",
     apiKeyDesc: "選填 — 用於需要認證的伺服器",
     urlPlaceholder: "http://localhost:11434",
@@ -443,18 +411,7 @@ const zhTW: Locale = {
     cmdGlobalDiscover: "發掘相關的 Cold 筆記",
     scopeCold: "僅 Cold",
     sectionSearch: "搜尋與索引",
-    sectionDesc: "Description 生成器",
-    descStats: "Description 統計",
-    descGood: "完整",
-    descShort: "過短",
-    descMissing: "缺少",
-    descNoFm: "無 frontmatter",
-    descPreviewDesc: "掃描所有筆記，為缺少或過短的 description 生成預覽報告。",
-    descApplyDesc: "將預覽的 description 寫入筆記的 frontmatter。",
-    previewBtn: "預覽",
-    previewingBtn: "生成中...",
-    applyBtn: "套用",
-    applyingBtn: "套用中...",
+    sectionAICuration: "AI 整理",
     noticeIndexEmpty: "Vault Search：索引為空，請先執行「重建索引」",
     noticeIndexing: (done, total) => `Vault Search：索引中 ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
@@ -503,10 +460,10 @@ ${notesBlock}
     llmPrompt: (title, content) => `任務：為筆記產生 description 和 tags。
 
 規則：
-1. description 用繁體中文，50-100 字
+1. description 必須使用繁體中文，50-100 字，禁止用英文或簡體中文
 2. description 必須描述具體內容，禁止重複標題
-3. tags 用繁體中文，3-5 個，不要 # 前綴，不能有空格
-4. 只回覆 JSON
+3. tags 必須使用繁體中文，3-5 個，不要 # 前綴，不能有空格
+4. 只回覆 JSON，不要解釋
 
 {"description": "...", "tags": ["...", "...", "..."]}
 

@@ -3,7 +3,6 @@
 // ============================================================
 
 export type ApiFormat = "ollama" | "openai";
-export type ChunkingMode = "off" | "smart" | "all";
 export type EmbeddingProviderType = "wasm" | "ollama" | "openai-compatible";
 
 export interface VaultSearchSettings {
@@ -30,10 +29,13 @@ export interface VaultSearchSettings {
     autoIndex: boolean;
     synonyms: Record<string, string[]>;
     llmModel: string;
-    minDescLength: number;
-    chunkingMode: ChunkingMode;
     chunkSize: number;
     chunkOverlap: number;
+    /** AI curation master switch (design D9). Gates description generation
+     *  commands and topic-grouped MOC. Phase 8 will flip the default to false
+     *  and add an Onboarding modal; dogfood phase keeps it true so existing
+     *  flows stay reachable from the command palette without manual toggling. */
+    enableAICuration: boolean;
 }
 
 export const DEFAULT_SETTINGS: VaultSearchSettings = {
@@ -48,14 +50,13 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     maxEmbedChars: 2000,
     hotDays: 90,
     searchScope: "hot",
-    excludePatterns: ["_templates/", "templates/", ".trash/", "_description_report.md", "3_wiki/"],
+    excludePatterns: ["_templates/", "templates/", ".trash/", "3_wiki/"],
     autoIndex: true,
     synonyms: {},
     llmModel: "qwen3:1.7b",
-    minDescLength: 30,
-    chunkingMode: "off" as ChunkingMode,
     chunkSize: 2000,
     chunkOverlap: 100,
+    enableAICuration: true,
 };
 
 export interface NoteEntry {

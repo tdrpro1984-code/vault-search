@@ -578,5 +578,37 @@ export class SearchView extends ItemView {
         }
 
         renderResultItem(item, result, this.app);
+        this.maybeAddGenerateDescriptionButton(item, result);
+    }
+
+    /**
+     * Phase 6 (004 rebrand): Discover/Search rows for notes without a
+     * description get a small "Generate description" button — solves the
+     * discoverability gap left when the auto pipeline was removed (D7).
+     */
+    private maybeAddGenerateDescriptionButton(item: HTMLElement, result: SearchResult) {
+        if (!this.plugin.settings.enableAICuration) return;
+        const file = this.app.vault.getAbstractFileByPath(result.path);
+        if (!(file instanceof TFile)) return;
+        const cache = this.app.metadataCache.getFileCache(file);
+        const desc = cache?.frontmatter?.description;
+        if (typeof desc === "string" && desc.trim().length > 0) return;
+
+        const btn = item.createEl("button", {
+            text: t.menuDescGenerate,
+            cls: "vault-search-desc-btn",
+        });
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            btn.setAttribute("disabled", "true");
+            btn.setText(t.descGenerating(0, 1));
+            const ok = await this.plugin.descGenerator.generateForActiveNote(file);
+            if (ok) {
+                btn.remove();
+            } else {
+                btn.removeAttribute("disabled");
+                btn.setText(t.menuDescGenerate);
+            }
+        });
     }
 }

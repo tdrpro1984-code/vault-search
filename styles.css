@@ -47,6 +47,27 @@
     -webkit-box-orient: vertical;
 }
 
+.vault-search-desc-btn {
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 0.78em;
+    color: var(--text-muted);
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.vault-search-desc-btn:hover:not([disabled]) {
+    color: var(--text-normal);
+    border-color: var(--interactive-accent);
+}
+
+.vault-search-desc-btn[disabled] {
+    opacity: 0.6;
+    cursor: progress;
+}
+
 /* Sidebar panel */
 .vault-search-panel {
     padding: 8px;

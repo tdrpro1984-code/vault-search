@@ -1,4 +1,4 @@
-import { normalizePath, Notice, Plugin, TFile, requestUrl } from "obsidian";
+import { Menu, normalizePath, Notice, Plugin, TFile, requestUrl } from "obsidian";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import {
     createProvider,
@@ -109,17 +109,59 @@ export default class VaultSearchPlugin extends Plugin {
             callback: () => this.updateIndex(),
         });
 
+        // Phase 6 (004 rebrand): description generation is now per-note,
+        // gated by enableAICuration. checkCallback hides the command from
+        // the palette when the gate is off or no markdown file is active.
         this.addCommand({
-            id: "desc-preview",
-            name: t.cmdDescPreview,
-            callback: () => this.descGenerator.preview(),
+            id: "desc-active-note",
+            name: t.cmdDescActive,
+            checkCallback: (checking) => {
+                if (!this.settings.enableAICuration) return false;
+                const file = this.app.workspace.getActiveFile();
+                if (!file || file.extension !== "md") return false;
+                if (checking) return true;
+                void this.descGenerator.generateForActiveNote(file);
+                return true;
+            },
         });
 
         this.addCommand({
-            id: "desc-apply",
-            name: t.cmdDescApply,
-            callback: () => this.descGenerator.apply(),
+            id: "desc-current-results",
+            name: t.cmdDescSelected,
+            checkCallback: (checking) => {
+                // Gate on AI curation only. Empty/no-sidebar runtime check
+                // happens in the handler so the command is discoverable
+                // before the user has searched anything.
+                if (!this.settings.enableAICuration) return false;
+                if (checking) return true;
+                const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
+                const view = leaf?.view as SearchView | undefined;
+                if (!view) {
+                    new Notice(t.descOpenSidebarFirst);
+                    return true;
+                }
+                if (view.getCurrentResults().length === 0) {
+                    new Notice(t.descNoEligible);
+                    return true;
+                }
+                void this.generateDescriptionsForResults(view);
+                return true;
+            },
         });
+
+        // Phase 6: right-click "Generate description" on any .md in the
+        // file explorer or editor menu. Same enableAICuration gate.
+        this.registerEvent(
+            this.app.workspace.on("file-menu", (menu: Menu, file) => {
+                if (!this.settings.enableAICuration) return;
+                if (!(file instanceof TFile) || file.extension !== "md") return;
+                menu.addItem((item) => {
+                    item.setTitle(t.menuDescGenerate)
+                        .setIcon("sparkles")
+                        .onClick(() => void this.descGenerator.generateForActiveNote(file));
+                });
+            }),
+        );
 
         this.addCommand({
             id: "global-discover",
@@ -131,12 +173,18 @@ export default class VaultSearchPlugin extends Plugin {
             id: "generate-moc-grouped",
             name: t.cmdGenerateMocGrouped,
             checkCallback: (checking) => {
+                // Gate on AI curation only. The grouped flow has its own
+                // fallback-to-flat path when result count < 5, so we keep
+                // the command discoverable regardless of current results.
+                if (!this.settings.enableAICuration) return false;
+                if (checking) return true;
                 const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
                 const view = leaf?.view as SearchView | undefined;
-                const results = view?.getCurrentResults() ?? [];
-                if (results.length < 5) return false;
-                if (checking) return true;
-                void view!.generateMocGroupedFlow();
+                if (!view) {
+                    new Notice(t.descOpenSidebarFirst);
+                    return true;
+                }
+                void view.generateMocGroupedFlow();
                 return true;
             },
         });
@@ -544,6 +592,30 @@ export default class VaultSearchPlugin extends Plugin {
         if (!leaf) return;
         const view = leaf.view as SearchView;
         view.showGlobalDiscover();
+    }
+
+    /**
+     * Phase 6: batch-generate descriptions for the current search/Discover
+     * results panel. Skips notes that already have a description; opens a
+     * Notice if nothing is eligible so the user isn't left wondering.
+     */
+    async generateDescriptionsForResults(view: SearchView): Promise<void> {
+        const results = view.getCurrentResults();
+        const targets: TFile[] = [];
+        for (const r of results) {
+            const file = this.app.vault.getAbstractFileByPath(r.path);
+            if (!(file instanceof TFile) || file.extension !== "md") continue;
+            const cache = this.app.metadataCache.getFileCache(file);
+            const desc = cache?.frontmatter?.description;
+            if (!desc || (typeof desc === "string" && desc.trim().length === 0)) {
+                targets.push(file);
+            }
+        }
+        if (targets.length === 0) {
+            new Notice(t.descNoEligible);
+            return;
+        }
+        await this.descGenerator.generateForFiles(targets);
     }
 
     // ── Find Similar ─────────────────────────────────
