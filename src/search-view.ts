@@ -326,12 +326,26 @@ export class SearchView extends ItemView {
         return this.lastResults;
     }
 
+    /**
+     * Phase 7: sidebar "Generate MOC" buttons now invoke MOC 2.0 grouped flow.
+     * generateMocGroupedFlow internally falls back to flat MOC (buildMoc) when
+     * results < 5 or clustering is degenerate.
+     */
     private async generateMocFromSearch() {
-        await this.buildMoc(this.lastResults, "search");
+        await this.generateMocGroupedFlow();
     }
 
     private async generateMoc() {
-        await this.buildMoc(this.lastDiscoverResults, `discover-${this.discoverMode}`);
+        await this.generateMocGroupedFlow();
+    }
+
+    /** Flat MOC fallback (used by generateMocGroupedFlow when clustering can't help). */
+    private async buildMocFlatFromCurrentTab(): Promise<void> {
+        if (this.activeTab === "discover") {
+            await this.buildMoc(this.lastDiscoverResults, `discover-${this.discoverMode}`);
+        } else {
+            await this.buildMoc(this.lastResults, "search");
+        }
     }
 
     /**
@@ -356,8 +370,7 @@ export class SearchView extends ItemView {
         if (tier === "block") {
             if (results.length < 5) {
                 new Notice(t.mocTooFewResults);
-                if (this.activeTab === "discover") await this.generateMoc();
-                else await this.generateMocFromSearch();
+                await this.buildMocFlatFromCurrentTab();
             } else {
                 new Notice(t.mocTooManyResults(results.length));
             }
@@ -367,24 +380,37 @@ export class SearchView extends ItemView {
         // tier === "warn" (51-100 notes): MVP just proceeds. A confirmation
         // modal is tracked as v0.4.1 follow-up (design D6 warn tier).
 
-        // Assemble NoteForMoc entries (requires embedding from plugin.index
-        // and frontmatter description from metadataCache).
+        // Phase 7 (004 rebrand): assemble NoteForMoc by reading body_vec from
+        // SQLite (D8). The legacy in-memory plugin.index path is gone; description
+        // comes from notes.description (SSOT) with metadataCache as fallback for
+        // edits made since the last index pass.
+        const store = this.plugin.store;
+        if (!store) {
+            new Notice(t.indexEmpty);
+            return;
+        }
         const notesForMoc: NoteForMoc[] = [];
+        const missingPaths: string[] = [];
         for (const r of results) {
-            const entry = this.plugin.index?.notes[r.path];
-            if (!entry || !entry.embedding?.length) continue;
-            const file = this.app.vault.getAbstractFileByPath(r.path);
-            let description = "";
-            if (file instanceof TFile) {
-                const cache = this.app.metadataCache.getFileCache(file);
-                description = String(cache?.frontmatter?.description ?? "");
+            const stored = store.getNote(r.path);
+            if (!stored || stored.bodyVec.length === 0) {
+                missingPaths.push(r.path);
+                continue;
+            }
+            let description = stored.description ?? "";
+            if (!description) {
+                const file = this.app.vault.getAbstractFileByPath(r.path);
+                if (file instanceof TFile) {
+                    const cache = this.app.metadataCache.getFileCache(file);
+                    description = String(cache?.frontmatter?.description ?? "");
+                }
             }
             notesForMoc.push({
                 path: r.path,
                 title: r.title,
                 description,
                 score: r.score,
-                embedding: entry.embedding,
+                embedding: Array.from(stored.bodyVec),
                 tier: r.tier,
                 tags: r.tags,
             });
@@ -393,12 +419,9 @@ export class SearchView extends ItemView {
         console.debug("[MOC 2.0] notesForMoc after assembly:", notesForMoc.length,
             "out of", results.length, "results");
         if (notesForMoc.length < 5) {
-            const missing = results.filter(r => !this.plugin.index?.notes[r.path]?.embedding?.length);
-            console.warn("[MOC 2.0] too few notesForMoc. Missing embeddings:",
-                missing.map(r => r.path));
+            console.warn("[MOC 2.0] too few notesForMoc. Missing in store:", missingPaths);
             new Notice(t.mocTooFewResults);
-            if (this.activeTab === "discover") await this.generateMoc();
-            else await this.generateMocFromSearch();
+            await this.buildMocFlatFromCurrentTab();
             return;
         }
 
@@ -443,8 +466,7 @@ export class SearchView extends ItemView {
             if (err instanceof FallbackToFlatError) {
                 console.debug("[MOC 2.0] clustering degenerate, falling back to flat");
                 new Notice(t.mocClusteringDegenerate);
-                if (this.activeTab === "discover") await this.generateMoc();
-                else await this.generateMocFromSearch();
+                await this.buildMocFlatFromCurrentTab();
                 return;
             }
             console.error("Vault Search: MOC 2.0 generation failed", err);
@@ -472,8 +494,8 @@ export class SearchView extends ItemView {
         } else if (source.startsWith("discover-current")) {
             const activeFile = this.app.workspace.getActiveFile();
             if (activeFile) {
-                const entry = this.plugin.index?.notes[activeFile.path];
-                const noteTitle = entry?.title ?? activeFile.basename;
+                const stored = this.plugin.store?.getNote(activeFile.path);
+                const noteTitle = stored?.title ?? activeFile.basename;
                 mocTitle = t.mocTitleRelated(noteTitle);
                 mocDesc = t.mocDescRelated(noteTitle);
             }
