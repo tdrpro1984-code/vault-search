@@ -1,9 +1,9 @@
 import { SuggestModal, TFile } from "obsidian";
 import type VaultSearchPlugin from "./main";
 import { SearchResult } from "./types";
-import { checkOllama, embedText, rankNotes, renderResultItem } from "./utils";
+import { renderResultItem } from "./utils";
 import { t } from "./i18n";
-import { expandQuery } from "./synonyms";
+import { searchHybrid } from "./search/searchHybrid";
 
 export class SearchModal extends SuggestModal<SearchResult> {
     private plugin: VaultSearchPlugin;
@@ -52,27 +52,22 @@ export class SearchModal extends SuggestModal<SearchResult> {
     }
 
     private async executeSearch(query: string) {
-        if (!this.plugin.index) return;
-
-        const { ollamaUrl, ollamaModel } = this.plugin.settings;
-
+        if (!this.plugin.store || !this.plugin.provider) return;
         try {
-            if (!await checkOllama(ollamaUrl)) {
-                console.warn("Vault Search:", t.ollamaNotReady);
-                return;
-            }
             if (query !== this.lastQuery) return;
-            const queryVec = await embedText(
-                expandQuery(query, this.plugin.settings),
-                ollamaUrl, ollamaModel, this.plugin.settings.apiFormat,
-                this.plugin.settings.apiKey,
+            const results = await searchHybrid(
+                query,
+                { store: this.plugin.store, provider: this.plugin.provider },
+                {
+                    topResults: this.plugin.settings.topResults,
+                    searchScope: this.plugin.settings.searchScope,
+                },
             );
-            if (!queryVec || queryVec.length === 0 || query !== this.lastQuery) return;
-
-            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings, query);
+            if (query !== this.lastQuery) return;
+            this.lastResults = results;
             this.inputEl.dispatchEvent(new Event("input"));
         } catch (e) {
-            console.error("Vault Search: search failed", e);
+            console.error("vault-curate: hybrid search failed", e);
         }
     }
 

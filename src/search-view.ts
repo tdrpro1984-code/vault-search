@@ -12,6 +12,7 @@ declare module "obsidian" {
 import type VaultSearchPlugin from "./main";
 import { SearchResult } from "./types";
 import { checkOllama, discoverForNote, embedText, formatLocalDateTime, getContentPreview, globalDiscover, rankNotes, renderResultItem, toWikilink } from "./utils";
+import { searchHybrid } from "./search/searchHybrid";
 import { classifyMocSize } from "./clustering";
 import { FallbackToFlatError, generateMocGrouped, NoteForMoc, renderMocGrouped } from "./moc-generator";
 import { t } from "./i18n";
@@ -164,32 +165,28 @@ export class SearchView extends ItemView {
     private async executeSearch(query: string) {
         this.currentQuery = query;
 
-        if (!this.plugin.index) {
+        if (!this.plugin.store || !this.plugin.provider) {
             this.searchStatusEl.setText(t.indexEmpty);
             return;
         }
 
-        const { ollamaUrl, ollamaModel } = this.plugin.settings;
-
         try {
-            if (!await checkOllama(ollamaUrl)) {
-                this.searchStatusEl.setText(t.ollamaNotReady);
-                return;
-            }
             if (query !== this.currentQuery) return;
-            const queryVec = await embedText(
-                expandQuery(query, this.plugin.settings),
-                ollamaUrl, ollamaModel, this.plugin.settings.apiFormat,
-                this.plugin.settings.apiKey,
+            const results = await searchHybrid(
+                query,
+                { store: this.plugin.store, provider: this.plugin.provider },
+                {
+                    topResults: this.plugin.settings.topResults,
+                    searchScope: this.plugin.settings.searchScope,
+                },
             );
-            if (!queryVec || queryVec.length === 0 || query !== this.currentQuery) return;
-
-            this.lastResults = rankNotes(queryVec, this.plugin.index, this.plugin.settings, query);
+            if (query !== this.currentQuery) return;
+            this.lastResults = results;
             this.renderSearchResults();
             this.searchStatusEl.setText(t.searchResults(this.lastResults.length));
         } catch (e) {
             this.searchStatusEl.setText(t.searchFailed);
-            console.error("Vault Search:", e);
+            console.error("vault-curate: hybrid search failed", e);
         }
     }
 
