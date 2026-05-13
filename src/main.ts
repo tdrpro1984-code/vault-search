@@ -221,11 +221,11 @@ export default class VaultSearchPlugin extends Plugin {
         // Settings tab
         this.addSettingTab(new VaultSearchSettingTab(this.app, this));
 
-        // Phase 8 (004 rebrand): first-launch onboarding. `last_indexed_at`
-        // is empty until the very first rebuild succeeds, so it doubles as
-        // "user has never finished setup" signal — more reliable than just
-        // checking that the SQLite db file exists (schema_version is set
-        // at open() time).
+        // Phase 8 (004 rebrand) first-launch onboarding. `last_indexed_at`
+        // stays empty until the very first rebuild succeeds, so it doubles
+        // as "user has never finished setup" — Migration was descoped (see
+        // tasks.md Phase 9), v0.3.x BRAT upgraders re-install + rebuild
+        // through the same onboarding path.
         this.app.workspace.onLayoutReady(() => {
             if (this.store && !this.store.getMeta("last_indexed_at")) {
                 this.showOnboardingModal();
