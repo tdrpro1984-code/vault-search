@@ -42,10 +42,14 @@ export class WasmEmbeddingProvider implements EmbeddingProvider {
     constructor(
         private readonly cfg: WasmProviderConfig,
         private readonly workerSource: string,
+        private readonly ortWasmBinary: ArrayBuffer,
     ) {
         this.displayName = `Built-in (${shortModelName(cfg.modelId)}, ${cfg.dtype})`;
         if (!workerSource) {
             throw new Error('WasmEmbeddingProvider requires workerSource (read worker.js).');
+        }
+        if (!ortWasmBinary || ortWasmBinary.byteLength === 0) {
+            throw new Error('WasmEmbeddingProvider requires ortWasmBinary (fetched by main.ts).');
         }
     }
 
@@ -140,11 +144,16 @@ export class WasmEmbeddingProvider implements EmbeddingProvider {
             this.failInit(err);
         };
 
+        // Clone the ArrayBuffer before postMessage so the plugin instance can
+        // reuse `this.ortWasmBinary` for the next provider after a settings
+        // change (transferring would detach the buffer on the main side).
+        const ortClone = this.ortWasmBinary.slice(0);
         worker.postMessage({
             type: 'init',
             modelId: this.cfg.modelId,
             dtype: this.cfg.dtype,
-        });
+            ortWasmBinary: ortClone,
+        }, [ortClone]);
     }
 
     private handleWorkerMessage(msg: unknown): void {

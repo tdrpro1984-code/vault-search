@@ -1,40 +1,42 @@
 /**
- * sql.js (WASM SQLite) runtime initialization for Obsidian Electron environment.
+ * sql.js (WASM SQLite) runtime initialization for Obsidian's Electron renderer.
  *
- * Bundling strategy (matches esbuild.config.mjs):
- *   - sql-wasm.wasm is NOT inlined — it ships as a sibling release asset
- *     and is fetched at runtime via `locateFile` pointing at the GitHub
- *     release URL. This keeps main.js below Obsidian Sync Standard's 5 MB
- *     limit and avoids tripping the bundle scanner on base64-encoded
- *     binary content (Obsidian's audit flags long base58-shaped strings
- *     even when they're WASM, not crypto addresses).
+ * `app://obsidian.md` has no CORS permission for github.com release downloads,
+ * so the previous `locateFile`-pointing-at-GitHub approach failed at runtime
+ * (`No 'Access-Control-Allow-Origin' header is present`). Instead we let
+ * main.ts fetch the WASM bytes via Obsidian's `requestUrl` (which bypasses
+ * browser CORS), then pass the bytes to `initSqlJs` via the `wasmBinary`
+ * Emscripten option.
  *
- * sql.js exports a CommonJS factory; we use the typed import from @types/sql.js.
+ * sql.js exports a CommonJS factory; the typed import is from @types/sql.js,
+ * whose `SqlJsConfig = Partial<EmscriptenModule>` already includes
+ * `wasmBinary` from @types/emscripten.
  */
-import initSqlJs, { type SqlJsStatic, type Database } from 'sql.js';
-
-const SQL_WASM_URL =
-    'https://github.com/notoriouslab/vault-curate/releases/latest/download/sql-wasm.wasm';
+import initSqlJs, { type SqlJsStatic, type Database } from "sql.js";
 
 let cachedStatic: SqlJsStatic | null = null;
 
 /**
- * Lazily initialise the sql.js WASM module. First call triggers WASM compile;
- * subsequent calls return the cached static.
+ * Lazily initialise the sql.js WASM module. First call instantiates from the
+ * provided bytes; subsequent calls return the cached static and ignore the
+ * argument (the WASM module is global to the process).
  */
-export async function getSqlJs(): Promise<SqlJsStatic> {
+export async function getSqlJs(wasmBinary: Uint8Array): Promise<SqlJsStatic> {
     if (cachedStatic) return cachedStatic;
-    cachedStatic = await initSqlJs({
-        locateFile: (file: string) => file === 'sql-wasm.wasm' ? SQL_WASM_URL : file,
-    });
+    const ab = new ArrayBuffer(wasmBinary.byteLength);
+    new Uint8Array(ab).set(wasmBinary);
+    cachedStatic = await initSqlJs({ wasmBinary: ab });
     return cachedStatic;
 }
 
 /**
  * Open a database from existing bytes, or create a new empty one if bytes is null.
  */
-export async function openDb(bytes: Uint8Array | null): Promise<Database> {
-    const SQL = await getSqlJs();
+export async function openDb(
+    bytes: Uint8Array | null,
+    wasmBinary: Uint8Array,
+): Promise<Database> {
+    const SQL = await getSqlJs(wasmBinary);
     return bytes ? new SQL.Database(bytes) : new SQL.Database();
 }
 

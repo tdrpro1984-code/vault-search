@@ -83,11 +83,15 @@ export class SQLiteStore {
     }
 
     /** Factory: open existing db file or create fresh, apply schema. */
-    static async open(adapter: PersistAdapter, dbPath: string): Promise<SQLiteStore> {
+    static async open(
+        adapter: PersistAdapter,
+        dbPath: string,
+        wasmBinary: Uint8Array,
+    ): Promise<SQLiteStore> {
         const store = new SQLiteStore(adapter, dbPath);
         const exists = await adapter.exists(dbPath);
         const bytes = exists ? await adapter.read(dbPath) : null;
-        store.db = await openDb(bytes);
+        store.db = await openDb(bytes, wasmBinary);
         applySchema(store.db);
         return store;
     }

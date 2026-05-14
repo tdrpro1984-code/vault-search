@@ -19,7 +19,13 @@ import { VaultSearchSettingTab } from "./settings";
 import { findSimilarSqlite } from "./search/discoverSqlite";
 import { DescriptionGenerator } from "./description-generator";
 import { OnboardingModal, applyOnboardingChoice } from "./ui/OnboardingModal";
+import { loadWasmAsset } from "./runtime/wasmAssets";
 import { t } from "./i18n";
+
+const SQL_WASM_URL =
+    "https://github.com/notoriouslab/vault-curate/releases/latest/download/sql-wasm.wasm";
+const ORT_WASM_URL =
+    "https://github.com/notoriouslab/vault-curate/releases/latest/download/ort-wasm-simd-threaded.wasm";
 
 export default class VaultSearchPlugin extends Plugin {
     settings!: VaultSearchSettings;
@@ -27,6 +33,8 @@ export default class VaultSearchPlugin extends Plugin {
     descGenerator!: DescriptionGenerator;
     store: SQLiteStore | null = null;
     provider: EmbeddingProvider | null = null;
+    private sqlWasmBinary: Uint8Array | null = null;
+    private ortWasmBinary: ArrayBuffer | null = null;
     private debounceTimers: Map<string, number> = new Map();
 
     async onload() {
@@ -36,7 +44,27 @@ export default class VaultSearchPlugin extends Plugin {
         // Wrap in try/catch so a backend failure cannot prevent the plugin
         // from registering its commands — diagnostics belong in the console,
         // not a dead palette.
+        //
+        // Step 1: pre-fetch sql.js + ort-web WASM bytes via Obsidian's
+        // `requestUrl` (CORS bypass) and cache them in the plugin folder.
+        // Both runtimes accept the raw bytes (`wasmBinary` option) instead
+        // of a URL, so they never trigger browser-level fetches that
+        // `app://obsidian.md` is not permitted to make against github.com.
         try {
+            const sqlWasm = await loadWasmAsset(this, "sql-wasm.wasm", SQL_WASM_URL);
+            const ortWasm = await loadWasmAsset(
+                this,
+                "ort-wasm-simd-threaded.wasm",
+                ORT_WASM_URL,
+            );
+            this.sqlWasmBinary = sqlWasm;
+            // Copy into a fresh ArrayBuffer (Uint8Array.buffer may be a
+            // SharedArrayBuffer in some runtimes; postMessage transfer list
+            // and ORT's wasmBinary both expect ArrayBuffer).
+            const ortAb = new ArrayBuffer(ortWasm.byteLength);
+            new Uint8Array(ortAb).set(ortWasm);
+            this.ortWasmBinary = ortAb;
+
             this.store = await this.openStore();
             this.provider = await this.buildProvider();
             this.indexer = new Indexer(this, this.store, this.provider);
@@ -126,8 +154,7 @@ export default class VaultSearchPlugin extends Plugin {
                 // before the user has searched anything.
                 if (!this.settings.enableAICuration) return false;
                 if (checking) return true;
-                const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
-                const view = leaf?.view as SearchView | undefined;
+                const view = this.getReadySearchView();
                 if (!view) {
                     new Notice(t.descOpenSidebarFirst);
                     return true;
@@ -179,8 +206,7 @@ export default class VaultSearchPlugin extends Plugin {
                 // the command discoverable regardless of current results.
                 if (!this.settings.enableAICuration) return false;
                 if (checking) return true;
-                const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
-                const view = leaf?.view as SearchView | undefined;
+                const view = this.getReadySearchView();
                 if (!view) {
                     new Notice(t.descOpenSidebarFirst);
                     return true;
@@ -274,9 +300,9 @@ export default class VaultSearchPlugin extends Plugin {
         }
         if (leaf) {
             void workspace.revealLeaf(leaf);
-            // Focus the search input
-            const view = leaf.view as SearchView;
-            if (view.focusInput) view.focusInput();
+            // Focus the search input (skip if view is still deferred)
+            const view = leaf.view instanceof SearchView ? leaf.view : null;
+            view?.focusInput?.();
         }
     }
 
@@ -291,10 +317,11 @@ export default class VaultSearchPlugin extends Plugin {
         if (this.activeDiscoverTimer) window.clearTimeout(this.activeDiscoverTimer);
         this.activeDiscoverTimer = window.setTimeout(() => {
             this.lastDiscoverPath = file.path;
-            const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
-            if (!leaf) return;
-            const view = leaf.view as SearchView;
-            if (view.isDiscoverTabActive()) {
+            // Skip silently when the sidebar leaf isn't mounted yet or its
+            // view is still deferred — Active Discovery only makes sense
+            // when the user has already opened the panel.
+            const view = this.getReadySearchView();
+            if (view && view.isDiscoverTabActive()) {
                 void view.discoverForFile(file);
             }
         }, 500);
@@ -306,9 +333,8 @@ export default class VaultSearchPlugin extends Plugin {
             return;
         }
         await this.activateView();
-        const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
-        if (!leaf) return;
-        const view = leaf.view as SearchView;
+        const view = this.getReadySearchView();
+        if (!view) return;
         view.showGlobalDiscover();
     }
 
@@ -373,9 +399,8 @@ export default class VaultSearchPlugin extends Plugin {
         }
 
         await this.activateView();
-        const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
-        if (leaf) {
-            const view = leaf.view as SearchView;
+        const view = this.getReadySearchView();
+        if (view) {
             view.showResults(topResults, t.similarTo(note.title));
         }
     }
@@ -443,6 +468,21 @@ export default class VaultSearchPlugin extends Plugin {
         await this.indexer.renameNote(oldPath, file.path, file);
     }
 
+    /**
+     * Return the SearchView instance if the sidebar leaf is mounted AND
+     * its view has been instantiated. Obsidian 1.7+ defers sidebar view
+     * construction until first reveal, so `leaf.view` can be a
+     * `DeferredView` placeholder until then — `getLeavesOfType` returns
+     * the leaf, but casting `.view` to SearchView and calling methods on
+     * it crashes with "is not a function". Use this helper everywhere
+     * we read the SearchView from the workspace.
+     */
+    private getReadySearchView(): SearchView | null {
+        const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
+        if (!leaf) return null;
+        return leaf.view instanceof SearchView ? leaf.view : null;
+    }
+
     /** DB path inside the plugin folder. */
     private dbPath(): string {
         return normalizePath(
@@ -466,6 +506,9 @@ export default class VaultSearchPlugin extends Plugin {
     }
 
     private async openStore(): Promise<SQLiteStore> {
+        if (!this.sqlWasmBinary) {
+            throw new Error("sql.js WASM bytes not loaded (preload step failed)");
+        }
         const adapter: PersistAdapter = {
             read: async (path) => {
                 const exists = await this.app.vault.adapter.exists(path);
@@ -484,7 +527,7 @@ export default class VaultSearchPlugin extends Plugin {
             },
             exists: (path) => this.app.vault.adapter.exists(path),
         };
-        const store = await SQLiteStore.open(adapter, this.dbPath());
+        const store = await SQLiteStore.open(adapter, this.dbPath(), this.sqlWasmBinary);
         await this.dropLegacyIndexJson();
         return store;
     }
@@ -514,6 +557,9 @@ export default class VaultSearchPlugin extends Plugin {
 
         const providerType = this.settings.embeddingProvider;
         if (providerType === "wasm") {
+            if (!this.ortWasmBinary) {
+                throw new Error("ORT WASM bytes not loaded (preload step failed)");
+            }
             return createProvider(
                 {
                     providerType: "wasm",
@@ -525,7 +571,7 @@ export default class VaultSearchPlugin extends Plugin {
                     wasmModelId: "Xenova/bge-small-zh-v1.5",
                     wasmDtype: "q8",
                 },
-                { workerSource },
+                { workerSource, ortWasmBinary: this.ortWasmBinary },
             );
         }
 

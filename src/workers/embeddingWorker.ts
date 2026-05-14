@@ -35,6 +35,12 @@ type InitMsg = {
     /** Pass-through option to transformers.js env if main thread wants to
      *  override the default HF Hub URL. */
     remoteUrl?: string;
+    /** ORT WASM binary fetched by main thread via Obsidian's `requestUrl`
+     *  (browser `fetch()` from `app://obsidian.md` is CORS-blocked against
+     *  github.com). Set on `env.backends.onnx.wasm.wasmBinary` so the WASM
+     *  fallback path doesn't try to fetch from a URL at all. WebGPU path
+     *  ignores this. */
+    ortWasmBinary?: ArrayBuffer;
 };
 type EmbedMsg = { type: 'embed'; id: number; texts: string[] };
 type DisposeMsg = { type: 'dispose' };
@@ -105,22 +111,19 @@ async function handleInit(msg: InitMsg): Promise<void> {
         (tfm.env as unknown as { remoteHost: string }).remoteHost = msg.remoteUrl;
     }
 
-    // ORT wasm tuning still applies to the wasm fallback path. WebGPU
-    // path ignores these. Also point ort at our own GitHub release asset
-    // instead of onnxruntime-web's jsdelivr CDN default — GitHub releases
-    // are reachable for anyone who managed to install the plugin in the
-    // first place; cdn.jsdelivr.net is intermittently blocked in China.
-    // Using /latest/download/ keeps the URL stable across plugin versions
-    // (a user always gets the WASM matching the latest published release).
-    const ortWasmUrl =
-        'https://github.com/notoriouslab/vault-curate/releases/latest/download/ort-wasm-simd-threaded.wasm';
+    // ORT wasm tuning still applies to the wasm fallback path. WebGPU path
+    // ignores these. The WASM binary is supplied by main thread via
+    // `msg.ortWasmBinary` and set as `env.backends.onnx.wasm.wasmBinary` —
+    // onnxruntime-web instantiates from the bytes directly instead of
+    // fetching from a URL (which would be CORS-blocked under Obsidian's
+    // `app://obsidian.md` origin).
     const ortWasm = (tfm.env as unknown as {
         backends?: {
             onnx?: {
                 wasm?: {
                     proxy?: boolean;
                     numThreads?: number;
-                    wasmPaths?: string | Record<string, string>;
+                    wasmBinary?: ArrayBufferLike;
                 };
             };
         };
@@ -128,7 +131,9 @@ async function handleInit(msg: InitMsg): Promise<void> {
     if (ortWasm) {
         ortWasm.proxy = false;
         ortWasm.numThreads = 1;
-        ortWasm.wasmPaths = { 'ort-wasm-simd-threaded.wasm': ortWasmUrl };
+        if (msg.ortWasmBinary) {
+            ortWasm.wasmBinary = msg.ortWasmBinary;
+        }
     }
 
     const pipeline = tfm.pipeline;

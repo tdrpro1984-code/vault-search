@@ -31,12 +31,16 @@ export function createProvider(
             if (!context.workerSource) {
                 throw new Error('WASM provider requires context.workerSource');
             }
+            if (!context.ortWasmBinary) {
+                throw new Error('WASM provider requires context.ortWasmBinary');
+            }
             return new WasmEmbeddingProvider(
                 {
                     modelId: settings.wasmModelId ?? 'Xenova/bge-base-zh',
                     dtype: settings.wasmDtype ?? 'q8',
                 },
                 context.workerSource,
+                context.ortWasmBinary,
             );
         }
         case 'ollama': {
