@@ -1,7 +1,7 @@
 {
   "name": "vault-curate",
   "version": "1.0.0",
-  "description": "High-quality Chinese-friendly semantic search, with optional AI curation.",
+  "description": "Hybrid semantic search and AI curation for your vault. Combines BM25 keyword, on-device WebGPU embeddings, and fuzzy title matching. Multilingual, with particularly strong Chinese/CJK support. Opt-in AI features auto-generate note descriptions and topic-grouped Maps of Content. Local-first, no API keys.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
