@@ -1,17 +1,20 @@
 /**
  * sql.js (WASM SQLite) runtime initialization for Obsidian Electron environment.
  *
- * Bundling strategy (matches design.md D2 + esbuild.config.mjs):
- *   - sql-wasm.wasm is imported via esbuild's `'.wasm': 'binary'` loader,
- *     so the WASM binary is inlined into main.js as a Uint8Array literal.
- *   - This means initSqlJs() does not need to fetch the WASM from a URL —
- *     we pass the binary directly via `locateFile` returning a data URL,
- *     OR more reliably via the `wasmBinary` option.
+ * Bundling strategy (matches esbuild.config.mjs):
+ *   - sql-wasm.wasm is NOT inlined — it ships as a sibling release asset
+ *     and is fetched at runtime via `locateFile` pointing at the GitHub
+ *     release URL. This keeps main.js below Obsidian Sync Standard's 5 MB
+ *     limit and avoids tripping the bundle scanner on base64-encoded
+ *     binary content (Obsidian's audit flags long base58-shaped strings
+ *     even when they're WASM, not crypto addresses).
  *
  * sql.js exports a CommonJS factory; we use the typed import from @types/sql.js.
  */
 import initSqlJs, { type SqlJsStatic, type Database } from 'sql.js';
-import sqlJsWasmBinary from 'sql.js/dist/sql-wasm.wasm';
+
+const SQL_WASM_URL =
+    'https://github.com/notoriouslab/vault-curate/releases/latest/download/sql-wasm.wasm';
 
 let cachedStatic: SqlJsStatic | null = null;
 
@@ -22,10 +25,8 @@ let cachedStatic: SqlJsStatic | null = null;
 export async function getSqlJs(): Promise<SqlJsStatic> {
     if (cachedStatic) return cachedStatic;
     cachedStatic = await initSqlJs({
-        // sql.js typings don't expose wasmBinary directly, but the runtime accepts it.
-        // We cast to bypass the typings gap.
-        wasmBinary: sqlJsWasmBinary as unknown as ArrayBuffer,
-    } as unknown as Parameters<typeof initSqlJs>[0]);
+        locateFile: (file: string) => file === 'sql-wasm.wasm' ? SQL_WASM_URL : file,
+    });
     return cachedStatic;
 }
 

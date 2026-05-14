@@ -49,10 +49,13 @@ jobs:
             manifest.json
             styles.css
             ort-wasm-simd-threaded.wasm
+            sql-wasm.wasm
 
       - name: Upload assets to release (overwrite)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release upload "${{ steps.resolve.outputs.tag }}" \
-            main.js manifest.json styles.css ort-wasm-simd-threaded.wasm --clobber
+            main.js manifest.json styles.css \
+            ort-wasm-simd-threaded.wasm sql-wasm.wasm \
+            --clobber

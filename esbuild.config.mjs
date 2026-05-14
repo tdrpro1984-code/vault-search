@@ -32,10 +32,16 @@ if (!existsSync(ortWasmSrc)) {
     `Missing onnxruntime-web WASM at ${ortWasmSrc}. Did npm install onnxruntime-web run?`,
   );
 }
-// Copy WASM to plugin root so release.yml can attach it as a release asset.
-// (It's NOT auto-downloaded by Obsidian Community store, but the worker
-// fetches it from the release at runtime — see workers/embeddingWorker.ts.)
+// Copy WASMs to plugin root so release.yml can attach them as release assets.
+// (Neither is auto-downloaded by Obsidian Community store, but the worker and
+// the sql.js runtime fetch them at runtime from the release URL.)
 copyFileSync(ortWasmSrc, path.join(PLUGIN_ROOT, 'ort-wasm-simd-threaded.wasm'));
+
+const sqlJsWasmSrc = path.resolve('./node_modules/sql.js/dist/sql-wasm.wasm');
+if (!existsSync(sqlJsWasmSrc)) {
+  throw new Error(`Missing sql.js WASM at ${sqlJsWasmSrc}.`);
+}
+copyFileSync(sqlJsWasmSrc, path.join(PLUGIN_ROOT, 'sql-wasm.wasm'));
 
 const WORKER_BUNDLE_PATH = path.join(PLUGIN_ROOT, 'worker.js');
 
