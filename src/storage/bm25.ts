@@ -7,9 +7,6 @@
  * would mean changing the entire storage API surface — we keep sql.js for
  * its battle-tested simplicity and compute BM25 in TypeScript instead.
  *
- * Reference (same approach as `erayaydn0/obsidian-vault-search` 0.1.0):
- *   `src/core/SQLiteStore/scoring.ts` ships BM25 in plain TS.
- *
  * Tokenisation uses the same `cjkTokenize` rules as design.md D2 specified for
  * FTS5 (CJK trigrams + ASCII words), so query/doc tokens line up consistently.
  */

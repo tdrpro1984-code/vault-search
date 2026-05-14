@@ -317,18 +317,18 @@ const en: Locale = {
     rerunOnboardingBtn: "Open onboarding",
     dimMismatchNotice: (skipped) =>
         `${skipped} notes have a different embedding dimension than the current model. Run "Rebuild index" to recover.`,
-    noticeIndexEmpty: "Vault Search: Index is empty. Run 'Rebuild index' first",
-    noticeIndexing: (done, total) => `Vault Search: Indexing ${done}/${total}...`,
+    noticeIndexEmpty: "Vault Curate: Index is empty. Run 'Rebuild index' first",
+    noticeIndexing: (done, total) => `Vault Curate: Indexing ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `, ${failed} failed` : "";
-        return `Vault Search: Done — ${total} notes (${hot} hot, ${cold} cold${f})`;
+        return `Vault Curate: Done — ${total} notes (${hot} hot, ${cold} cold${f})`;
     },
-    noticeUpToDate: "Vault Search: Index up to date",
+    noticeUpToDate: "Vault Curate: Index up to date",
     noticeUpdated: (updated, total, hot) =>
-        `Vault Search: Updated ${updated} notes (total: ${total}, hot: ${hot})`,
-    noticeIndexCorrupt: "Vault Search: Index file is corrupted. Please rebuild index.",
-    indexingInProgress: "Vault Search: Indexing already in progress",
-    viewDisplayName: "Vault search",
+        `Vault Curate: Updated ${updated} notes (total: ${total}, hot: ${hot})`,
+    noticeIndexCorrupt: "Vault Curate: Index file is corrupted. Please rebuild index.",
+    indexingInProgress: "Vault Curate: Indexing already in progress",
+    viewDisplayName: "Vault Curate",
     mocTitleSearch: (query) => `MOC: ${query}`,
     mocDescSearch: (query) => `Search results for "${query}"`,
     mocTitleRelated: (title) => `MOC: ${title}`,
@@ -518,17 +518,17 @@ const zhTW: Locale = {
     rerunOnboardingBtn: "開啟 Onboarding",
     dimMismatchNotice: (skipped) =>
         `${skipped} 篇筆記的 embedding 維度與當前模型不符。請執行「重建索引」修復。`,
-    noticeIndexEmpty: "Vault Search：索引為空，請先執行「重建索引」",
-    noticeIndexing: (done, total) => `Vault Search：索引中 ${done}/${total}...`,
+    noticeIndexEmpty: "Vault Curate：索引為空，請先執行「重建索引」",
+    noticeIndexing: (done, total) => `Vault Curate：索引中 ${done}/${total}...`,
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `，${failed} 篇失敗` : "";
-        return `Vault Search：完成 — ${total} 篇（${hot} hot、${cold} cold${f}）`;
+        return `Vault Curate：完成 — ${total} 篇（${hot} hot、${cold} cold${f}）`;
     },
-    noticeUpToDate: "Vault Search：索引已是最新",
+    noticeUpToDate: "Vault Curate：索引已是最新",
     noticeUpdated: (updated, total, hot) =>
-        `Vault Search：已更新 ${updated} 篇（共 ${total} 篇，${hot} hot）`,
-    noticeIndexCorrupt: "Vault Search：索引檔案已損壞，請重建索引。",
-    indexingInProgress: "Vault Search：正在索引中，請稍候",
+        `Vault Curate：已更新 ${updated} 篇（共 ${total} 篇，${hot} hot）`,
+    noticeIndexCorrupt: "Vault Curate：索引檔案已損壞，請重建索引。",
+    indexingInProgress: "Vault Curate：正在索引中，請稍候",
     viewDisplayName: "語意搜尋",
     mocTitleSearch: (query) => `MOC：${query}`,
     mocDescSearch: (query) => `「${query}」的搜尋結果`,

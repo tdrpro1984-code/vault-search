@@ -364,30 +364,30 @@ export function renderResultItem(
 ) {
     if (result.tier === "cold") container.addClass("is-cold");
 
-    const titleRow = container.createDiv({ cls: "vault-search-title-row" });
+    const titleRow = container.createDiv({ cls: "vault-curate-title-row" });
     titleRow.createSpan({
         text: result.tier === "cold" ? "\u2744\ufe0f" : "\ud83d\udd25",
-        cls: `vault-search-tier vault-search-tier-${result.tier}`,
+        cls: `vault-curate-tier vault-curate-tier-${result.tier}`,
     });
-    titleRow.createSpan({ text: result.title, cls: "vault-search-title" });
-    titleRow.createSpan({ text: result.score.toFixed(3), cls: "vault-search-score" });
+    titleRow.createSpan({ text: result.title, cls: "vault-curate-title" });
+    titleRow.createSpan({ text: result.score.toFixed(3), cls: "vault-curate-score" });
 
     const file = app.vault.getAbstractFileByPath(result.path);
     if (file instanceof TFile) {
         void getContentPreview(app, file).then(preview => {
             if (preview && container.isConnected) {
-                container.createDiv({ text: preview, cls: "vault-search-desc" });
+                container.createDiv({ text: preview, cls: "vault-curate-desc" });
             }
         });
     }
 
-    const metaRow = container.createDiv({ cls: "vault-search-meta" });
+    const metaRow = container.createDiv({ cls: "vault-curate-meta" });
     if (result.tags.length > 0) {
-        metaRow.createSpan({ text: result.tags.join(", "), cls: "vault-search-tags" });
+        metaRow.createSpan({ text: result.tags.join(", "), cls: "vault-curate-tags" });
     }
     const folder = result.path.substring(0, result.path.lastIndexOf("/"));
     if (folder) {
-        metaRow.createSpan({ text: folder, cls: "vault-search-folder" });
+        metaRow.createSpan({ text: folder, cls: "vault-curate-folder" });
     }
 }
 

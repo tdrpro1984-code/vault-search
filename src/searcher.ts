@@ -35,7 +35,7 @@ export class SearchModal extends SuggestModal<SearchResult> {
     }
 
     renderSuggestion(result: SearchResult, el: HTMLElement) {
-        const container = el.createDiv({ cls: "vault-search-result" });
+        const container = el.createDiv({ cls: "vault-curate-result" });
         renderResultItem(container, result, this.app);
     }
 

@@ -85,7 +85,7 @@ export async function generateMocGrouped(params: GenerateMocParams): Promise<Moc
             const result = await nameCluster(nonNoise[i], notes, settings);
             named.push({ ...nonNoise[i], ...result, isFallback: false });
         } catch (err) {
-            console.warn("Vault Search: cluster naming failed, using fallback", err);
+            console.warn("Vault Curate: cluster naming failed, using fallback", err);
             named.push(fallbackNamedCluster(nonNoise[i], notes, i));
         }
     }

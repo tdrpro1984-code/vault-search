@@ -53,24 +53,24 @@ export class OnboardingModal extends Modal {
 
     onOpen(): void {
         this.titleEl.setText(t.onboardingTitle);
-        this.contentEl.createEl("p", { text: t.onboardingIntro, cls: "vault-search-onboarding-intro" });
+        this.contentEl.createEl("p", { text: t.onboardingIntro, cls: "vault-curate-onboarding-intro" });
 
         this.contentEl.createEl("h4", { text: t.onboardingProviderHeading });
-        const providerGroup = this.contentEl.createDiv({ cls: "vault-search-onboarding-providers" });
+        const providerGroup = this.contentEl.createDiv({ cls: "vault-curate-onboarding-providers" });
         this.buildProviderOption(providerGroup, "wasm", t.embeddingProviderBuiltin, t.builtinModelNote);
         this.buildProviderOption(providerGroup, "ollama", t.embeddingProviderOllama, "");
         this.buildProviderOption(providerGroup, "openai-compatible", t.embeddingProviderOpenAI, "");
 
-        this.endpointBody = this.contentEl.createDiv({ cls: "vault-search-onboarding-endpoint" });
+        this.endpointBody = this.contentEl.createDiv({ cls: "vault-curate-onboarding-endpoint" });
         this.endpointBody.style.display = "none";
         this.buildOpenAIFields(this.endpointBody);
 
         this.contentEl.createEl("h4", { text: t.onboardingAIHeading });
-        const aiGroup = this.contentEl.createDiv({ cls: "vault-search-onboarding-ai" });
+        const aiGroup = this.contentEl.createDiv({ cls: "vault-curate-onboarding-ai" });
         this.buildAIOption(aiGroup, "no", t.onboardingAINo);
         this.buildAIOption(aiGroup, "yes", t.onboardingAIYes);
 
-        const btnRow = this.contentEl.createDiv({ cls: "vault-search-modal-btnrow" });
+        const btnRow = this.contentEl.createDiv({ cls: "vault-curate-modal-btnrow" });
         const skipBtn = btnRow.createEl("button", { text: t.onboardingLater });
         skipBtn.addEventListener("click", () => this.complete(false, true));
 
@@ -135,14 +135,14 @@ export class OnboardingModal extends Modal {
         label: string,
         note: string,
     ) {
-        const row = parent.createDiv({ cls: "vault-search-onboarding-option" });
-        const radio = row.createEl("input", { type: "radio", attr: { name: "vault-search-provider", value } });
+        const row = parent.createDiv({ cls: "vault-curate-onboarding-option" });
+        const radio = row.createEl("input", { type: "radio", attr: { name: "vault-curate-provider", value } });
         if (value === this.chosenProvider) radio.checked = true;
         row.createEl("label", { text: label });
-        const status = row.createDiv({ cls: "vault-search-onboarding-status" });
+        const status = row.createDiv({ cls: "vault-curate-onboarding-status" });
         this.statusEls[value] = status;
         if (note) {
-            row.createDiv({ text: note, cls: "vault-search-onboarding-note" });
+            row.createDiv({ text: note, cls: "vault-curate-onboarding-note" });
         }
         radio.addEventListener("change", () => {
             if (radio.checked) {
@@ -153,8 +153,8 @@ export class OnboardingModal extends Modal {
     }
 
     private buildAIOption(parent: HTMLElement, value: AICurationChoice, label: string) {
-        const row = parent.createDiv({ cls: "vault-search-onboarding-option" });
-        const radio = row.createEl("input", { type: "radio", attr: { name: "vault-search-ai", value } });
+        const row = parent.createDiv({ cls: "vault-curate-onboarding-option" });
+        const radio = row.createEl("input", { type: "radio", attr: { name: "vault-curate-ai", value } });
         if (value === this.chosenAICuration) radio.checked = true;
         row.createEl("label", { text: label });
         radio.addEventListener("change", () => {
@@ -173,9 +173,9 @@ export class OnboardingModal extends Modal {
         keyInput.type = "password";
         keyInput.addEventListener("input", () => { this.openaiKey = keyInput.value.trim(); });
 
-        const testRow = parent.createDiv({ cls: "vault-search-onboarding-test" });
+        const testRow = parent.createDiv({ cls: "vault-curate-onboarding-test" });
         const testBtn = testRow.createEl("button", { text: t.onboardingTestConnection });
-        const testStatus = testRow.createSpan({ cls: "vault-search-onboarding-test-status" });
+        const testStatus = testRow.createSpan({ cls: "vault-curate-onboarding-test-status" });
         testBtn.addEventListener("click", async () => {
             if (this.isClosed) return;
             testStatus.setText("...");
@@ -186,7 +186,7 @@ export class OnboardingModal extends Modal {
     }
 
     private makeLabeledInput(parent: HTMLElement, label: string, initial: string): HTMLInputElement {
-        const row = parent.createDiv({ cls: "vault-search-onboarding-field" });
+        const row = parent.createDiv({ cls: "vault-curate-onboarding-field" });
         row.createEl("label", { text: label });
         const input = row.createEl("input", { type: "text" });
         input.value = initial;

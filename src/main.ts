@@ -298,7 +298,7 @@ export default class VaultSearchPlugin extends Plugin {
             callback: () => void this.dev004IndexProbe(),
         });
 
-        console.debug("Vault Search loaded");
+        console.debug("Vault Curate loaded");
     }
 
     /**
@@ -574,7 +574,7 @@ export default class VaultSearchPlugin extends Plugin {
         // SQLiteStore.dispose() flushes synchronously when pending mutations.
         void this.store?.dispose();
         this.provider?.dispose();
-        console.debug("Vault Search unloaded");
+        console.debug("Vault Curate unloaded");
     }
 
     /** Public — also called from Settings → AI Curation → "Re-run onboarding". */

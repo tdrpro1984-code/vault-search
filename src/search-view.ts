@@ -19,7 +19,7 @@ import { FallbackToFlatError, generateMocGrouped, NoteForMoc, renderMocGrouped }
 import { t } from "./i18n";
 import { expandQuery } from "./synonyms";
 
-export const VIEW_TYPE_SEARCH = "vault-search-view";
+export const VIEW_TYPE_SEARCH = "vault-curate-view";
 
 type TabId = "search" | "discover";
 type DiscoverMode = "current" | "global";
@@ -72,19 +72,19 @@ export class SearchView extends ItemView {
         await super.onOpen();
         const container = this.containerEl.children[1] as HTMLElement;
         container.empty();
-        container.addClass("vault-search-panel");
+        container.addClass("vault-curate-panel");
 
         // Tab bar
-        const tabBar = container.createDiv({ cls: "vault-search-tab-bar" });
+        const tabBar = container.createDiv({ cls: "vault-curate-tab-bar" });
         this.tabEls.search = this.buildTab(tabBar, "search", t.tabSearch);
         this.tabEls.discover = this.buildTab(tabBar, "discover", t.tabDiscover);
 
         // Search content
-        this.searchContainer = container.createDiv({ cls: "vault-search-tab-content" });
+        this.searchContainer = container.createDiv({ cls: "vault-curate-tab-content" });
         this.buildSearchUI(this.searchContainer);
 
         // Discover content
-        this.discoverContainer = container.createDiv({ cls: "vault-search-tab-content" });
+        this.discoverContainer = container.createDiv({ cls: "vault-curate-tab-content" });
         this.buildDiscoverUI(this.discoverContainer);
 
         this.switchTab("search");
@@ -93,7 +93,7 @@ export class SearchView extends ItemView {
     // ── Tab management ─────────────────────────────────
 
     private buildTab(parent: HTMLElement, id: TabId, label: string): HTMLDivElement {
-        const tab = parent.createDiv({ cls: "vault-search-tab", text: label });
+        const tab = parent.createDiv({ cls: "vault-curate-tab", text: label });
         tab.addEventListener("click", () => this.switchTab(id));
         return tab;
     }
@@ -119,24 +119,24 @@ export class SearchView extends ItemView {
     // ── Search UI ──────────────────────────────────────
 
     private buildSearchUI(container: HTMLDivElement) {
-        const searchBar = container.createDiv({ cls: "vault-search-bar" });
+        const searchBar = container.createDiv({ cls: "vault-curate-bar" });
         this.inputEl = searchBar.createEl("input", {
             type: "text",
             placeholder: t.searchPlaceholder,
-            cls: "vault-search-input",
+            cls: "vault-curate-input",
         });
         this.inputEl.addEventListener("input", () => {
             this.scheduleSearch(this.inputEl.value);
         });
 
-        const searchActions = container.createDiv({ cls: "vault-search-mode-toggle" });
+        const searchActions = container.createDiv({ cls: "vault-curate-mode-toggle" });
         searchActions.createEl("button", {
             text: t.generateMoc,
-            cls: "vault-search-mode-btn vault-search-moc-btn",
+            cls: "vault-curate-mode-btn vault-curate-moc-btn",
         }).addEventListener("click", () => void this.generateMocFromSearch());
 
-        this.searchStatusEl = container.createDiv({ cls: "vault-search-status" });
-        this.searchResultsEl = container.createDiv({ cls: "vault-search-results" });
+        this.searchStatusEl = container.createDiv({ cls: "vault-curate-status" });
+        this.searchResultsEl = container.createDiv({ cls: "vault-curate-results" });
     }
 
     focusInput() {
@@ -211,25 +211,25 @@ export class SearchView extends ItemView {
 
     private buildDiscoverUI(container: HTMLDivElement) {
         // Mode toggle
-        const modeBar = container.createDiv({ cls: "vault-search-mode-toggle" });
+        const modeBar = container.createDiv({ cls: "vault-curate-mode-toggle" });
         this.modeEls.current = modeBar.createEl("button", {
             text: t.discoverCurrentNote,
-            cls: "vault-search-mode-btn",
+            cls: "vault-curate-mode-btn",
         });
         this.modeEls.global = modeBar.createEl("button", {
             text: t.discoverGlobal,
-            cls: "vault-search-mode-btn",
+            cls: "vault-curate-mode-btn",
         });
         this.mocBtn = modeBar.createEl("button", {
             text: t.generateMoc,
-            cls: "vault-search-mode-btn vault-search-moc-btn",
+            cls: "vault-curate-mode-btn vault-curate-moc-btn",
         });
         this.modeEls.current.addEventListener("click", () => this.setDiscoverMode("current"));
         this.modeEls.global.addEventListener("click", () => this.setDiscoverMode("global"));
         this.mocBtn.addEventListener("click", () => void this.generateMoc());
 
-        this.discoverStatusEl = container.createDiv({ cls: "vault-search-status" });
-        this.discoverResultsEl = container.createDiv({ cls: "vault-search-results" });
+        this.discoverStatusEl = container.createDiv({ cls: "vault-curate-status" });
+        this.discoverResultsEl = container.createDiv({ cls: "vault-curate-results" });
 
         this.setDiscoverMode("current");
     }
@@ -517,7 +517,7 @@ export class SearchView extends ItemView {
                 await this.buildMocFlatFromCurrentTab();
                 return;
             }
-            console.error("Vault Search: MOC 2.0 generation failed", err);
+            console.error("Vault Curate: MOC 2.0 generation failed", err);
             new Notice(t.mocLlmUnavailable);
         }
     }
@@ -618,7 +618,7 @@ export class SearchView extends ItemView {
     // ── Shared result item (click + right-click menu + drag to Canvas) ──
 
     private createResultItem(parent: HTMLElement, result: SearchResult) {
-        const item = parent.createDiv({ cls: "vault-search-result-item" });
+        const item = parent.createDiv({ cls: "vault-curate-result-item" });
 
         // Click → open file
         item.addEventListener("click", () => {
@@ -635,7 +635,7 @@ export class SearchView extends ItemView {
             const file = this.app.vault.getAbstractFileByPath(result.path);
             if (!(file instanceof TFile)) return;
             const menu = new Menu();
-            this.app.workspace.trigger("file-menu", menu, file, "vault-search", this.leaf);
+            this.app.workspace.trigger("file-menu", menu, file, "vault-curate", this.leaf);
             menu.showAtMouseEvent(e);
         });
 
@@ -643,7 +643,7 @@ export class SearchView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(result.path);
         if (file instanceof TFile && this.app.dragManager) {
             this.app.dragManager.handleDrag(item, (dragEvent: DragEvent) => {
-                return this.app.dragManager.dragFile(dragEvent, file, "vault-search");
+                return this.app.dragManager.dragFile(dragEvent, file, "vault-curate");
             });
         }
 
@@ -666,7 +666,7 @@ export class SearchView extends ItemView {
 
         const btn = item.createEl("button", {
             text: t.btnDescGenerate,
-            cls: "vault-search-desc-btn",
+            cls: "vault-curate-desc-btn",
         });
         btn.addEventListener("click", async (e) => {
             e.stopPropagation();

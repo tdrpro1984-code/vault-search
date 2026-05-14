@@ -1,12 +1,12 @@
 /* Shared styles (modal + sidebar) */
-.vault-search-title-row {
+.vault-curate-title-row {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
     gap: 8px;
 }
 
-.vault-search-title {
+.vault-curate-title {
     font-weight: 600;
     flex: 1;
     overflow: hidden;
@@ -14,13 +14,13 @@
     white-space: nowrap;
 }
 
-.vault-search-score {
+.vault-curate-score {
     font-size: 0.85em;
     color: var(--text-muted);
     flex-shrink: 0;
 }
 
-.vault-search-meta {
+.vault-curate-meta {
     display: flex;
     gap: 12px;
     font-size: 0.85em;
@@ -28,15 +28,15 @@
     margin-top: 2px;
 }
 
-.vault-search-tags {
+.vault-curate-tags {
     color: var(--text-accent);
 }
 
-.vault-search-folder {
+.vault-curate-folder {
     color: var(--text-faint);
 }
 
-.vault-search-desc {
+.vault-curate-desc {
     font-size: 0.85em;
     color: var(--text-muted);
     margin-top: 2px;
@@ -47,7 +47,7 @@
     -webkit-box-orient: vertical;
 }
 
-.vault-search-desc-btn {
+.vault-curate-desc-btn {
     margin-top: 4px;
     padding: 2px 8px;
     font-size: 0.78em;
@@ -58,24 +58,24 @@
     cursor: pointer;
 }
 
-.vault-search-desc-btn:hover:not([disabled]) {
+.vault-curate-desc-btn:hover:not([disabled]) {
     color: var(--text-normal);
     border-color: var(--interactive-accent);
 }
 
-.vault-search-desc-btn[disabled] {
+.vault-curate-desc-btn[disabled] {
     opacity: 0.6;
     cursor: progress;
 }
 
 /* Settings: Advanced collapsible section */
-.vault-search-advanced {
+.vault-curate-advanced {
     margin-top: 1em;
     border-top: 1px solid var(--background-modifier-border);
     padding-top: 0.5em;
 }
 
-.vault-search-advanced-summary {
+.vault-curate-advanced-summary {
     cursor: pointer;
     font-weight: 600;
     color: var(--text-muted);
@@ -83,21 +83,21 @@
     list-style: none;
 }
 
-.vault-search-advanced-summary::before {
+.vault-curate-advanced-summary::before {
     content: "▸ ";
     display: inline-block;
     transition: transform 0.15s ease;
 }
 
-.vault-search-advanced[open] > .vault-search-advanced-summary::before {
+.vault-curate-advanced[open] > .vault-curate-advanced-summary::before {
     transform: rotate(90deg);
 }
 
-.vault-search-advanced-summary:hover {
+.vault-curate-advanced-summary:hover {
     color: var(--text-normal);
 }
 
-.vault-search-note {
+.vault-curate-note {
     margin: 0.5em 0 1em;
     padding: 0.6em 0.8em;
     font-size: 0.9em;
@@ -106,33 +106,33 @@
     border-radius: 4px;
 }
 
-.vault-search-modal-btnrow {
+.vault-curate-modal-btnrow {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
     margin-top: 1em;
 }
 
-.vault-search-modal-btnrow button.mod-warning {
+.vault-curate-modal-btnrow button.mod-warning {
     background: var(--interactive-accent);
     color: var(--text-on-accent);
 }
 
 /* Onboarding modal */
-.vault-search-onboarding-intro {
+.vault-curate-onboarding-intro {
     color: var(--text-muted);
     margin-bottom: 1em;
 }
 
-.vault-search-onboarding-providers,
-.vault-search-onboarding-ai {
+.vault-curate-onboarding-providers,
+.vault-curate-onboarding-ai {
     display: flex;
     flex-direction: column;
     gap: 0.4em;
     margin-bottom: 1em;
 }
 
-.vault-search-onboarding-option {
+.vault-curate-onboarding-option {
     display: grid;
     grid-template-columns: auto 1fr;
     column-gap: 8px;
@@ -140,33 +140,33 @@
     padding: 0.3em 0;
 }
 
-.vault-search-onboarding-option > .vault-search-onboarding-note {
+.vault-curate-onboarding-option > .vault-curate-onboarding-note {
     grid-column: 2;
     font-size: 0.85em;
     color: var(--text-faint);
 }
 
-.vault-search-onboarding-status {
+.vault-curate-onboarding-status {
     grid-column: 2;
     font-size: 0.85em;
     color: var(--text-muted);
 }
 
-.vault-search-onboarding-endpoint {
+.vault-curate-onboarding-endpoint {
     margin: 0.5em 0 1em;
     padding: 0.6em;
     background: var(--background-secondary);
     border-radius: 4px;
 }
 
-.vault-search-onboarding-field {
+.vault-curate-onboarding-field {
     display: flex;
     flex-direction: column;
     gap: 0.2em;
     margin-bottom: 0.5em;
 }
 
-.vault-search-onboarding-field input {
+.vault-curate-onboarding-field input {
     padding: 4px 6px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 4px;
@@ -174,27 +174,27 @@
     color: var(--text-normal);
 }
 
-.vault-search-onboarding-test {
+.vault-curate-onboarding-test {
     display: flex;
     align-items: center;
     gap: 8px;
 }
 
-.vault-search-onboarding-test-status {
+.vault-curate-onboarding-test-status {
     font-size: 0.85em;
     color: var(--text-muted);
 }
 
 /* Sidebar panel */
-.vault-search-panel {
+.vault-curate-panel {
     padding: 8px;
 }
 
-.vault-search-bar {
+.vault-curate-bar {
     margin-bottom: 8px;
 }
 
-.vault-search-input {
+.vault-curate-input {
     width: 100%;
     padding: 6px 10px;
     border: 1px solid var(--background-modifier-border);
@@ -204,53 +204,53 @@
     font-size: 14px;
 }
 
-.vault-search-input:focus {
+.vault-curate-input:focus {
     border-color: var(--interactive-accent);
     outline: none;
 }
 
-.vault-search-status {
+.vault-curate-status {
     font-size: 0.85em;
     color: var(--text-muted);
     margin-bottom: 6px;
 }
 
-.vault-search-results {
+.vault-curate-results {
     display: flex;
     flex-direction: column;
     gap: 2px;
 }
 
-.vault-search-result-item {
+.vault-curate-result-item {
     padding: 8px;
     border-radius: 4px;
     cursor: pointer;
 }
 
-.vault-search-result-item:hover {
+.vault-curate-result-item:hover {
     background: var(--background-modifier-hover);
 }
 
 /* Tier badges */
-.vault-search-tier {
+.vault-curate-tier {
     font-size: 0.8em;
     margin-right: 4px;
     flex-shrink: 0;
 }
 
-.vault-search-result-item.is-cold {
+.vault-curate-result-item.is-cold {
     border-left: 2px solid var(--text-faint);
 }
 
 /* Tab bar */
-.vault-search-tab-bar {
+.vault-curate-tab-bar {
     display: flex;
     gap: 0;
     border-bottom: 1px solid var(--background-modifier-border);
     margin-bottom: 8px;
 }
 
-.vault-search-tab {
+.vault-curate-tab {
     padding: 6px 12px;
     cursor: pointer;
     border-bottom: 2px solid transparent;
@@ -259,23 +259,23 @@
     user-select: none;
 }
 
-.vault-search-tab:hover {
+.vault-curate-tab:hover {
     color: var(--text-normal);
 }
 
-.vault-search-tab.is-active {
+.vault-curate-tab.is-active {
     color: var(--text-normal);
     border-bottom-color: var(--interactive-accent);
 }
 
 /* Discover mode toggle */
-.vault-search-mode-toggle {
+.vault-curate-mode-toggle {
     display: flex;
     gap: 8px;
     margin-bottom: 8px;
 }
 
-.vault-search-mode-btn {
+.vault-curate-mode-btn {
     padding: 4px 10px;
     border-radius: 12px;
     font-size: 0.85em;
@@ -285,18 +285,18 @@
     border: none;
 }
 
-.vault-search-mode-btn.is-active {
+.vault-curate-mode-btn.is-active {
     background: var(--interactive-accent);
     color: var(--text-on-accent);
 }
 
-.vault-search-moc-btn {
+.vault-curate-moc-btn {
     margin-left: auto;
     font-size: 0.8em;
 }
 
 /* Settings stats */
-.vault-search-stats {
+.vault-curate-stats {
     font-size: 0.8em;
     color: var(--text-muted);
     padding: 6px 12px;
@@ -305,17 +305,17 @@
     line-height: 1.6;
 }
 
-.vault-search-stats p {
+.vault-curate-stats p {
     margin: 0;
 }
 
 /* Settings: synonym textarea */
-.vault-search-synonyms-input {
+.vault-curate-synonyms-input {
     width: 100%;
 }
 
 /* Settings: remote server warning */
-.vault-search-remote-warn {
+.vault-curate-remote-warn {
     color: var(--text-error);
     font-size: 0.85em;
     margin-top: 4px;

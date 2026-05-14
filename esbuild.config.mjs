@@ -16,7 +16,6 @@ const PLUGIN_ROOT = path.resolve('.');
 // Ship onnxruntime-web WASM binary as a sibling file.
 // main.js reads it at load time and transfers it to the embedding Web Worker on
 // init, so the WASM never lives as a JS literal inside main.js or worker.js.
-// Reference: erayaydn0/obsidian-vault-search 0.1.0 already ships this way.
 // ─────────────────────────────────────────────────────────────────────────────
 const ortWasmSrc = path.resolve(
   './node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm',

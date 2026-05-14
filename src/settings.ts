@@ -80,7 +80,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             });
 
         if (this.plugin.settings.embeddingProvider === "wasm") {
-            const note = parent.createDiv({ cls: "vault-search-note" });
+            const note = parent.createDiv({ cls: "vault-curate-note" });
             note.setText(t.builtinModelNote);
         } else {
             this.buildExternalEmbeddingFields(parent);
@@ -203,10 +203,10 @@ export class VaultSearchSettingTab extends PluginSettingTab {
     // ── Section 3: Advanced (collapsed) ────────────────────────
 
     private buildAdvanced(parent: HTMLElement) {
-        const details = parent.createEl("details", { cls: "vault-search-advanced" });
+        const details = parent.createEl("details", { cls: "vault-curate-advanced" });
         details.createEl("summary", {
             text: t.sectionAdvanced,
-            cls: "vault-search-advanced-summary",
+            cls: "vault-curate-advanced-summary",
         });
         const adv = details;
 
@@ -316,7 +316,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                     .map(([k, v]) => `${k} = ${v.join(", ")}`);
                 text.setValue(lines.join("\n"));
                 text.inputEl.rows = 6;
-                text.inputEl.addClass("vault-search-synonyms-input");
+                text.inputEl.addClass("vault-curate-synonyms-input");
                 text.onChange(async (val) => {
                     const result: Record<string, string[]> = {};
                     for (const line of val.split("\n")) {
@@ -379,7 +379,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
         const store = this.plugin.store;
         if (store) {
             new Setting(adv).setName(t.indexStats).setHeading();
-            const stats = adv.createDiv({ cls: "vault-search-stats" });
+            const stats = adv.createDiv({ cls: "vault-curate-stats" });
             const allBody = store.getAllBodyVecs();
             let hotCount = 0;
             let coldCount = 0;
@@ -430,19 +430,19 @@ export class VaultSearchSettingTab extends PluginSettingTab {
     }
 
     private updateRemoteWarning(setting: Setting, url: string) {
-        const existing = setting.settingEl.querySelector(".vault-search-remote-warn");
+        const existing = setting.settingEl.querySelector(".vault-curate-remote-warn");
         if (existing) existing.remove();
-        const existingHttp = setting.settingEl.querySelector(".vault-search-http-warn");
+        const existingHttp = setting.settingEl.querySelector(".vault-curate-http-warn");
         if (existingHttp) existingHttp.remove();
         try {
             const parsed = new URL(url);
             const isLocal = isLoopbackHost(parsed.hostname);
             if (!isLocal) {
-                const warn = setting.settingEl.createDiv({ cls: "vault-search-remote-warn" });
+                const warn = setting.settingEl.createDiv({ cls: "vault-curate-remote-warn" });
                 warn.setText(t.remoteWarning);
             }
             if (parsed.protocol === "http:" && !isLocal && this.plugin.settings.apiKey) {
-                const warn = setting.settingEl.createDiv({ cls: "vault-search-http-warn vault-search-remote-warn" });
+                const warn = setting.settingEl.createDiv({ cls: "vault-curate-http-warn vault-curate-remote-warn" });
                 warn.setText(t.httpApiKeyWarning);
             }
         } catch { /* invalid URL, ignore */ }
@@ -503,7 +503,7 @@ class ProviderSwitchModal extends Modal {
         this.titleEl.setText(t.providerSwitchTitle);
         this.contentEl.createEl("p", { text: t.providerSwitchBody(this.noteCount) });
 
-        const btnRow = this.contentEl.createDiv({ cls: "vault-search-modal-btnrow" });
+        const btnRow = this.contentEl.createDiv({ cls: "vault-curate-modal-btnrow" });
 
         const cancelBtn = btnRow.createEl("button", { text: t.providerSwitchCancel });
         cancelBtn.addEventListener("click", () => this.resolve(false));
