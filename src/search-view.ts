@@ -335,7 +335,7 @@ export class SearchView extends ItemView {
         if (this.globalCancelled.value) return;
 
         if (results.length === 0) {
-            // Distinguish why: no Hot pool vs no Cold candidates vs everything filtered out.
+            // Distinguish why: no Hot pool vs no Cold candidates vs all filtered by minScore.
             const all = store.getAllNotesLight();
             const hasHot = all.some(r => r.tier !== "cold");
             const hasCold = all.some(r => r.tier === "cold");
@@ -343,7 +343,7 @@ export class SearchView extends ItemView {
                 ? t.discoverGlobalNoHot
                 : !hasCold
                     ? t.discoverGlobalNoCold
-                    : t.discoverGlobalEmpty;
+                    : t.discoverGlobalAllFiltered;
             this.discoverStatusEl.setText(msg);
         } else {
             this.discoverStatusEl.setText(t.discoverGlobalDesc);

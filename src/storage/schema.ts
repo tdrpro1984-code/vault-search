@@ -15,7 +15,7 @@
  */
 import type { Database } from 'sql.js';
 
-export const SCHEMA_VERSION = '1';
+export const SCHEMA_VERSION = '2';
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS notes (
@@ -54,13 +54,31 @@ CREATE INDEX IF NOT EXISTS idx_synonyms_term ON synonyms(term);
 `;
 
 /**
- * Apply schema (idempotent). Sets schema_version meta if not present.
+ * Apply schema (idempotent) + run forward migrations.
+ *
+ * Migration history:
+ *   - 1 → 2: introduce `bootstrapped` sticky meta flag. If the user already
+ *     has a successful index (last_indexed_at present), backfill bootstrapped
+ *     so auto-index on file events still fires after upgrade.
  */
 export function applySchema(db: Database): void {
     db.exec(SCHEMA_SQL);
-    // Set schema_version only if not yet set (first-init signal).
+
     const existing = db.exec("SELECT value FROM meta WHERE key='schema_version'");
-    if (existing.length === 0 || existing[0].values.length === 0) {
+    const currentVersion = existing.length > 0 && existing[0].values.length > 0
+        ? String(existing[0].values[0][0])
+        : null;
+
+    if (currentVersion === null) {
         db.run("INSERT INTO meta(key, value) VALUES('schema_version', ?)", [SCHEMA_VERSION]);
+        return;
+    }
+
+    if (currentVersion === '1') {
+        const lastIndexed = db.exec("SELECT value FROM meta WHERE key='last_indexed_at'");
+        if (lastIndexed.length > 0 && lastIndexed[0].values.length > 0) {
+            db.run("INSERT OR REPLACE INTO meta(key, value) VALUES('bootstrapped', '1')");
+        }
+        db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
     }
 }

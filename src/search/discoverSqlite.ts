@@ -177,9 +177,11 @@ export function findSimilarSqlite(
     return results.slice(0, settings.topResults);
 }
 
+const MAX_COLD_PROMOTION_POOL = 200;
+
 function rankWithColdPromotion(results: SearchResult[], topResults: number): SearchResult[] {
     results.sort((a, b) => b.score - a.score);
-    const candidates = results.slice(0, topResults * 2);
+    const candidates = results.slice(0, Math.min(MAX_COLD_PROMOTION_POOL, topResults * 2));
     candidates.sort((a, b) => {
         if (a.tier !== b.tier) return a.tier === "cold" ? -1 : 1;
         return b.score - a.score;

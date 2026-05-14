@@ -86,14 +86,17 @@ export function validateServerUrl(url: string) {
 }
 
 // Reject hosts a user has no legitimate reason to point at: cloud metadata
-// endpoints (AWS/Azure/GCP all live at 169.254.169.254, Alibaba at
-// 100.100.100.200) and IPv6 link-local. RFC 1918 private ranges (10/8,
-// 172.16/12, 192.168/16) are NOT rejected — LAN-hosted Ollama is a real use case.
+// endpoints (AWS/Azure/GCP at 169.254.169.254, Azure IMDS at 168.63.129.16,
+// Alibaba at 100.100.100.200) plus IPv6 link-local + deprecated site-local.
+// RFC 1918 private ranges (10/8, 172.16/12, 192.168/16) are NOT rejected —
+// LAN-hosted Ollama is a real use case.
 function isMetadataOrLinkLocal(rawHost: string): boolean {
     const host = rawHost.replace(/^\[|\]$/g, "").toLowerCase();
-    if (/^169\.254\./.test(host)) return true;          // IPv4 link-local /16
-    if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;  // IPv6 link-local fe80::/10
-    if (host === "100.100.100.200") return true;        // Alibaba metadata
+    if (/^169\.254\./.test(host)) return true;            // IPv4 link-local /16
+    if (host === "168.63.129.16") return true;            // Azure IMDS
+    if (host === "100.100.100.200") return true;          // Alibaba metadata
+    if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;    // IPv6 link-local fe80::/10
+    if (/^fe[c-f][0-9a-f]?:/.test(host)) return true;     // IPv6 site-local fec0::/10 (deprecated, still routable)
     return false;
 }
 

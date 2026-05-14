@@ -25,6 +25,7 @@ import type { EmbeddingProvider } from "./embedding";
 import { splitChunks } from "./indexer/chunker";
 import { meanPool } from "./utils/meanPool";
 import { stripFrontmatter } from "./utils";
+import { TOKENIZER_VERSION } from "./storage/cjkTokenize";
 import { t } from "./i18n";
 
 const EMBED_BATCH_SIZE = 8;
@@ -170,6 +171,16 @@ export class Indexer {
         await this.ensureProviderReady();
         if (this.store.isDisposed) return;
         this.emptySkippedCount = 0;
+
+        const storedTokenizer = this.store.getMeta("cjk_tokenizer_version");
+        if (storedTokenizer && storedTokenizer !== TOKENIZER_VERSION) {
+            new Notice(
+                `vault-curate: tokenizer upgraded (${storedTokenizer} → ${TOKENIZER_VERSION}). Rebuilding index...`,
+                8000,
+            );
+            await this.rebuild();
+            return;
+        }
 
         const storedModel = this.store.getMeta("embedding_model_id");
         if (storedModel && storedModel !== this.provider.modelId) {
@@ -362,6 +373,7 @@ export class Indexer {
         this.store.setMeta("embedding_model_id", this.provider.modelId);
         this.store.setMeta("embedding_dim", String(this.provider.dimension));
         this.store.setMeta("last_indexed_at", new Date().toISOString());
+        this.store.setMeta("cjk_tokenizer_version", TOKENIZER_VERSION);
         // Sticky flag: once we've ever finished a rebuild, auto-index on
         // file events stays enabled even if clearAllData wipes the four
         // index-state meta keys (e.g. mid-provider-switch crash).

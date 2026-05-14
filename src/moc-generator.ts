@@ -145,7 +145,10 @@ function parseClusterNamingResponse(raw: string): { title: string; intro: string
             const intro = String(parsed.intro ?? "").replace(STRIP_CONTROL_CHARS, " ").trim();
             if (title.length < MIN_NAMING_TITLE_CHARS || title.length > MAX_NAMING_TITLE_CHARS) return null;
             if (intro.length < MIN_NAMING_INTRO_CHARS || intro.length > MAX_NAMING_INTRO_CHARS) return null;
-            if (/[\n\r]/.test(title)) return null;
+            // Reject literal newlines + leading frontmatter / fence sequences
+            // a malicious LLM could use to break out of the MOC body.
+            if (/[\n\r]/.test(title) || /[\n\r]/.test(intro)) return null;
+            if (/^(---|```)/.test(title) || /^(---|```)/.test(intro)) return null;
             return { title, intro };
         } catch {
             return null;

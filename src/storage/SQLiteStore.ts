@@ -293,19 +293,26 @@ export class SQLiteStore {
     clearAllData(): void {
         if (this.disposed) return;
         // Wrap multi-statement clear in a transaction so a crash mid-clear
-        // leaves notes + chunks consistent (no orphaned chunks rows).
-        this.db.exec(`
-            BEGIN;
-            DELETE FROM chunks;
-            DELETE FROM notes;
-            DELETE FROM meta WHERE key IN (
-                'embedding_provider',
-                'embedding_model_id',
-                'embedding_dim',
-                'last_indexed_at'
-            );
-            COMMIT;
-        `);
+        // leaves notes + chunks consistent (no orphaned chunks rows). If exec
+        // throws partway, ROLLBACK best-effort so the next mutation doesn't
+        // get rejected by an open transaction.
+        try {
+            this.db.exec(`
+                BEGIN;
+                DELETE FROM chunks;
+                DELETE FROM notes;
+                DELETE FROM meta WHERE key IN (
+                    'embedding_provider',
+                    'embedding_model_id',
+                    'embedding_dim',
+                    'last_indexed_at'
+                );
+                COMMIT;
+            `);
+        } catch (err) {
+            try { this.db.exec('ROLLBACK'); } catch { /* best-effort */ }
+            throw err;
+        }
         this.touch(/*force*/ true);
     }
 

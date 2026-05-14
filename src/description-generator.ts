@@ -31,7 +31,13 @@ const TAG_LENGTH_CAP = 64;
  */
 export const STRIP_CONTROL_CHARS = new RegExp(
     "[" + "\\x00-\\x08" + "\\x0b\\x0c" + "\\x0e-\\x1f"
-        + "\\x7f-\\x9f" + "\\u2028\\u2029" + "]",
+        + "\\x7f-\\x9f"
+        + "\\u200b-\\u200f"  // zero-width space, ZWNJ, ZWJ, LRM, RLM
+        + "\\u2028\\u2029"   // line/paragraph separator
+        + "\\u202a-\\u202e"  // LRE/RLE/PDF/LRO/RLO (bidi overrides — visual injection)
+        + "\\u2060-\\u206f"  // word joiner + bidi isolate controls
+        + "\\ufeff"          // BOM / zero-width no-break space
+        + "]",
     "g",
 );
 

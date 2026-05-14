@@ -73,7 +73,13 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                     }
                     this.plugin.settings.embeddingProvider = newProvider;
                     await this.plugin.saveSettings();
-                    await this.plugin.reloadBackends();
+                    try {
+                        await this.plugin.reloadBackends();
+                    } catch {
+                        // reloadBackends already showed a Notice; swallow here
+                        // so the onChange handler doesn't leak unhandled rejection.
+                        return;
+                    }
                     this.display();
                     void this.plugin.rebuildIndex();
                 });
@@ -157,7 +163,11 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             }
             this.plugin.settings.ollamaModel = val;
             await this.plugin.saveSettings();
-            await this.plugin.reloadBackends();
+            try {
+                await this.plugin.reloadBackends();
+            } catch {
+                return;
+            }
             void this.plugin.rebuildIndex();
         }, "embedding");
     }

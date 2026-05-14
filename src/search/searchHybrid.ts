@@ -22,6 +22,11 @@ import { rrfFuse, topNFused } from './rrfFuse';
 
 const DEFAULT_WEIGHTS = { bm25: 1.0, semantic: 1.0, fuzzy: 0.5 };
 
+// Hard caps on derived counts so a tampered topResults (or future settings
+// drift) can't blow up BM25 / fusion / sort allocations in large vaults.
+const MAX_CANDIDATE_POOL = 500;
+const MAX_FUSED_TAKE = 300;
+
 export type HybridWeights = { bm25: number; semantic: number; fuzzy: number };
 
 export type SearchHybridDeps = {
@@ -57,7 +62,7 @@ export async function searchHybrid(
     if (q.length === 0) return [];
 
     const tStart = Date.now();
-    const candidatePool = Math.max(50, settings.topResults * 5);
+    const candidatePool = Math.min(MAX_CANDIDATE_POOL, Math.max(50, settings.topResults * 5));
     const weights = readHybridWeights(deps.store);
 
     const tBm25 = Date.now();
@@ -83,7 +88,7 @@ export async function searchHybrid(
     );
 
     // Take generously, then apply scope filter, then trim to topResults.
-    const top = topNFused(fused, settings.topResults * 3);
+    const top = topNFused(fused, Math.min(MAX_FUSED_TAKE, settings.topResults * 3));
     const out = materialise(top, deps.store, settings);
     console.debug(
         `vault-curate: hybrid '${q}' → ${out.length}/${fused.size} results in ${Date.now() - tStart}ms ` +

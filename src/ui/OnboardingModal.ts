@@ -325,7 +325,13 @@ export async function applyOnboardingChoice(
     // settings" path clears it via `Re-show onboarding` dev command.
     plugin.store?.setMeta("onboarding_dismissed", "1");
 
-    await plugin.reloadBackends();
+    try {
+        await plugin.reloadBackends();
+    } catch {
+        // reloadBackends already showed a Notice. Don't propagate so the
+        // onboarding "complete" path doesn't leak an unhandled rejection.
+        return;
+    }
 
     if (choice.indexNow) {
         void plugin.rebuildIndex();

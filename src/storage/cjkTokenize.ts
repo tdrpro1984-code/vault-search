@@ -14,6 +14,15 @@
  *
  * Apply to both content (write to chunks_fts.content) and queries (before MATCH).
  */
+/**
+ * Bumped when tokenization output changes so the indexer can force a rebuild
+ * on upgrade — old BM25 tokens won't match new query tokens otherwise.
+ *
+ *   1 → 2  (rc.1 hardening r2): emit surrogate-pair codepoints (emoji,
+ *           CJK Extension B+) as single tokens instead of dropping them.
+ */
+export const TOKENIZER_VERSION = '2';
+
 const CJK_RE = /[㐀-鿿豈-﫿]/;
 const ASCII_WORD_RE = /[a-zA-Z0-9_-]/;
 

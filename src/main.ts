@@ -604,6 +604,15 @@ export default class VaultSearchPlugin extends Plugin {
             this.settings.chunkOverlap = 100;
         }
 
+        // Defend against data.json tampering / partial load: clamp topResults
+        // like the UI onChange handler does. NaN / null / non-positive falls
+        // back to default; values above 100 are capped to prevent OOM during
+        // searchHybrid's full-chunk cosine sweep.
+        const tr = Number(this.settings.topResults);
+        this.settings.topResults = Number.isFinite(tr) && tr > 0
+            ? Math.min(tr, 100)
+            : DEFAULT_SETTINGS.topResults;
+
         // Phase 8 (004 rebrand): strip legacy v0.3.x fields that were carried
         // along by the loose Object.assign spread. Avoids stale `chunkingMode`,
         // `minDescLength`, and embedded `index` chunks polluting data.json.
