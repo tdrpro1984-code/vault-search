@@ -14,8 +14,8 @@ export async function fetchOllamaModels(url: string, format: ApiFormat = "ollama
         if (format === "openai") {
             const resp = await requestUrl({ url: `${url}/v1/models`, throw: false });
             if (resp.status !== 200) return [];
-            const data = resp.json;
-            return (data.data ?? []).map((m: { id: string }) => ({
+            const data = resp.json as { data?: Array<{ id: string }> };
+            return (data.data ?? []).map((m) => ({
                 name: m.id,
                 sizeGB: 0,
                 isEmbedding: /embed/i.test(m.id),
@@ -24,8 +24,8 @@ export async function fetchOllamaModels(url: string, format: ApiFormat = "ollama
 
         const resp = await requestUrl({ url: `${url}/api/tags`, throw: false });
         if (resp.status !== 200) return [];
-        const data = resp.json;
-        return (data.models ?? []).map((m: { name: string; size: number }) => ({
+        const data = resp.json as { models?: Array<{ name: string; size: number }> };
+        return (data.models ?? []).map((m) => ({
             name: m.name,
             sizeGB: m.size / 1e9,
             isEmbedding: /embed/i.test(m.name),
@@ -190,7 +190,8 @@ function expandIPv6(host: string): number[] | null {
     if (tail === null) return null;
     const fill = 8 - head.length - tail.length;
     if (fill < 0) return null;
-    return [...head, ...new Array(fill).fill(0), ...tail];
+    const padding: number[] = Array<number>(fill).fill(0);
+    return [...head, ...padding, ...tail];
 }
 
 export async function embedText(
@@ -240,11 +241,11 @@ export async function embedTexts(
             throw: false,
         }), EMBED_TIMEOUT_MS, "Embedding");
         if (resp.status !== 200) throw new Error(`API ${resp.status}: ${truncateError(resp.text)}`);
-        const data = resp.json;
+        const data = resp.json as { data?: Array<{ index: number; embedding: number[] }> };
         // OpenAI returns {data: [{embedding: [...]}, ...]} sorted by index
         return (data.data ?? [])
-            .sort((a: {index: number}, b: {index: number}) => a.index - b.index)
-            .map((d: {embedding: number[]}) => d.embedding ?? []);
+            .sort((a, b) => a.index - b.index)
+            .map((d) => d.embedding ?? []);
     }
 
     // Ollama format — supports input as string[]
@@ -256,7 +257,7 @@ export async function embedTexts(
         throw: false,
     }), EMBED_TIMEOUT_MS, "Embedding");
     if (resp.status !== 200) throw new Error(`Ollama ${resp.status}: ${truncateError(resp.text)}`);
-    const data = resp.json;
+    const data = resp.json as { embeddings?: number[][] };
     return data.embeddings ?? [];
 }
 
@@ -314,7 +315,10 @@ export async function requestLlmJson<T>(
         throw new Error(`LLM ${resp.status}: ${truncateError(resp.text)}`);
     }
 
-    const data = resp.json;
+    const data = resp.json as {
+        choices?: Array<{ message?: { content?: string } }>;
+        message?: { content?: string };
+    };
     const raw = isOpenAI
         ? (data.choices?.[0]?.message?.content ?? "")
         : (data.message?.content ?? "");
@@ -422,8 +426,8 @@ export function formatLocalDateTime(d: Date): string {
 
 export async function getContentPreview(app: App, file: TFile, maxChars = 100): Promise<string> {
     const cache = app.metadataCache.getFileCache(file);
-    const desc = cache?.frontmatter?.description;
-    if (desc) return desc;
+    const desc = cache?.frontmatter?.description as unknown;
+    if (typeof desc === "string" && desc.length > 0) return desc;
 
     const raw = await app.vault.cachedRead(file);
     let body = stripFrontmatter(raw);

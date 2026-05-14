@@ -140,9 +140,11 @@ async function nameCluster(
 function parseClusterNamingResponse(raw: string): { title: string; intro: string } {
     const attempt = (text: string): { title: string; intro: string } | null => {
         try {
-            const parsed = JSON.parse(text);
-            const title = String(parsed.title ?? "").replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").trim();
-            const intro = String(parsed.intro ?? "").replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, "").trim();
+            const parsed: unknown = JSON.parse(text);
+            if (typeof parsed !== "object" || parsed === null) return null;
+            const obj = parsed as { title?: unknown; intro?: unknown };
+            const title = String(obj.title ?? "").replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").trim();
+            const intro = String(obj.intro ?? "").replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, "").trim();
             if (title.length < MIN_NAMING_TITLE_CHARS || title.length > MAX_NAMING_TITLE_CHARS) return null;
             if (intro.length < MIN_NAMING_INTRO_CHARS || intro.length > MAX_NAMING_INTRO_CHARS) return null;
             // Reject literal newlines + leading frontmatter / fence sequences

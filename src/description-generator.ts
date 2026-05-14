@@ -42,7 +42,7 @@ export const STRIP_CONTROL_CHARS = new RegExp(
         + "\\ufeff"          // BOM / zero-width no-break space
         + "\\ufff9-\\ufffb"  // interlinear annotation anchor/separator/terminator
         + "]",
-    "g",
+    "gu",  // `u` flag silences ESLint no-misleading-character-class warning
 );
 // Plane 14 Unicode Tag block U+E0000-U+E007F (each codepoint encodes as a
 // surrogate pair in JS strings). The `u` flag puts the regex in code-point
@@ -144,7 +144,7 @@ export class DescriptionGenerator {
             // emoji-heavy notes would otherwise feed invalid UTF-16 to the LLM.
             const body = safeSlice(rawBody, BODY_CAP);
             const cache = this.plugin.app.metadataCache.getFileCache(file);
-            const existingTagsRaw = cache?.frontmatter?.tags;
+            const existingTagsRaw = cache?.frontmatter?.tags as unknown;
             const existingTags: string[] = Array.isArray(existingTagsRaw)
                 ? existingTagsRaw.map(String)
                 : typeof existingTagsRaw === "string"
@@ -193,7 +193,8 @@ export class DescriptionGenerator {
             const finalDescription = safeSlice(description, DESCRIPTION_LENGTH_CAP);
 
             try {
-                await this.plugin.app.fileManager.processFrontMatter(file, (fm) => {
+                await this.plugin.app.fileManager.processFrontMatter(file, (raw) => {
+                    const fm = raw as Record<string, unknown>;
                     fm.description = finalDescription;
                     // If tags came back as a non-array, non-string shape
                     // (number, object, etc.), don't overwrite — keep what's
@@ -266,19 +267,21 @@ export class DescriptionGenerator {
     private parseGeneratedJSON(raw: string): { description: string; tags?: string[] } {
         const tryParse = (text: string): { description: string; tags?: string[] } | null => {
             try {
-                const parsed = JSON.parse(text);
-                const descRaw = String(parsed.description ?? parsed.summary ?? "");
+                const parsed: unknown = JSON.parse(text);
+                if (typeof parsed !== "object" || parsed === null) return null;
+                const obj = parsed as { description?: unknown; summary?: unknown; tags?: unknown };
+                const descRaw = String(obj.description ?? obj.summary ?? "");
                 // Strip control + C1 + line-separator code points before any
                 // further use — a poisoned LLM response could otherwise smuggle
                 // ANSI escapes, YAML-confusing line breaks, or invisible chars
                 // into frontmatter.
                 const desc = safeSlice(descRaw.replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, ""), DESCRIPTION_LENGTH_CAP);
-                const tags = Array.isArray(parsed.tags)
-                    ? parsed.tags
-                        .map(String)
-                        .map((s: string) => s.replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").replace(/\s+/g, "_"))
-                        .map((s: string) => safeSlice(s, TAG_LENGTH_CAP))
-                        .filter((s: string) => s !== "..." && s !== "…" && s.length > 0)
+                const tags = Array.isArray(obj.tags)
+                    ? obj.tags
+                        .map((s) => String(s))
+                        .map((s) => s.replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").replace(/\s+/g, "_"))
+                        .map((s) => safeSlice(s, TAG_LENGTH_CAP))
+                        .filter((s) => s !== "..." && s !== "…" && s.length > 0)
                     : undefined;
                 return { description: desc, tags };
             } catch { return null; }
