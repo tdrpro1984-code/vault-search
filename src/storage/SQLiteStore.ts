@@ -176,6 +176,12 @@ export class SQLiteStore {
         }));
     }
 
+    countChunks(): number {
+        const res = this.db.exec(`SELECT COUNT(*) FROM chunks`);
+        if (res.length === 0 || res[0].values.length === 0) return 0;
+        return res[0].values[0][0] as number;
+    }
+
     getAllChunksRaw(): ChunkRawRow[] {
         const res = this.db.exec(
             `SELECT note_path, chunk_index, vec FROM chunks`,

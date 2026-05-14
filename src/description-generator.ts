@@ -35,11 +35,16 @@ export const STRIP_CONTROL_CHARS = new RegExp(
         + "\\u200b-\\u200f"  // zero-width space, ZWNJ, ZWJ, LRM, RLM
         + "\\u2028\\u2029"   // line/paragraph separator
         + "\\u202a-\\u202e"  // LRE/RLE/PDF/LRO/RLO (bidi overrides — visual injection)
-        + "\\u2060-\\u206f"  // word joiner + bidi isolate controls
+        + "\\u2060-\\u206f"  // word joiner + bidi isolate controls + math invisibles
         + "\\ufeff"          // BOM / zero-width no-break space
+        + "\\ufff9-\\ufffb"  // interlinear annotation anchor/separator/terminator
         + "]",
     "g",
 );
+// Unicode Tag block U+E0000-U+E007F (plane 14 — surrogate pair). String.replace
+// with this regex strips them in a separate pass so the BMP regex above can
+// stay simple.
+export const STRIP_UNICODE_TAGS = /[\u{E0000}-\u{E007F}]/gu;
 
 /** Slice text safely without splitting a UTF-16 surrogate pair. */
 function safeSlice(text: string, max: number): string {
@@ -225,7 +230,7 @@ export class DescriptionGenerator {
         // Defang YAML-breaking characters before we ever consider writing this
         // into frontmatter (processFrontMatter quotes most things, but explicit
         // sanitisation here keeps the round-trip predictable).
-        raw = raw.replace(STRIP_CONTROL_CHARS, " ").replace(/---/g, "—");
+        raw = raw.replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, "").replace(/---/g, "—");
         return raw.trim();
     }
 
@@ -264,11 +269,11 @@ export class DescriptionGenerator {
                 // further use — a poisoned LLM response could otherwise smuggle
                 // ANSI escapes, YAML-confusing line breaks, or invisible chars
                 // into frontmatter.
-                const desc = safeSlice(descRaw.replace(STRIP_CONTROL_CHARS, " "), DESCRIPTION_LENGTH_CAP);
+                const desc = safeSlice(descRaw.replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, ""), DESCRIPTION_LENGTH_CAP);
                 const tags = Array.isArray(parsed.tags)
                     ? parsed.tags
                         .map(String)
-                        .map((s: string) => s.replace(STRIP_CONTROL_CHARS, "").replace(/\s+/g, "_"))
+                        .map((s: string) => s.replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").replace(/\s+/g, "_"))
                         .map((s: string) => safeSlice(s, TAG_LENGTH_CAP))
                         .filter((s: string) => s !== "..." && s !== "…" && s.length > 0)
                     : undefined;

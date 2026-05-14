@@ -94,7 +94,6 @@ export interface Locale {
     discoverGlobal: string;
     discoverRelatedTo: (title: string) => string;
     discoverEmpty: string;
-    discoverGlobalEmpty: string;
     discoverNoIndex: string;
     discoverComputing: string;
     discoverGlobalDesc: string;
@@ -146,6 +145,7 @@ export interface Locale {
     noticeUpToDate: string;
     noticeUpdated: (updated: number, total: number, hot: number) => string;
     noticeEmptySkipped: (n: number) => string;
+    noticeLargeVault: (chunks: number) => string;
     discoverGlobalNoHot: string;
     discoverGlobalNoCold: string;
     discoverGlobalAllFiltered: string;
@@ -275,7 +275,6 @@ const en: Locale = {
     discoverGlobal: "Global",
     discoverRelatedTo: (title) => `Related to: ${title}`,
     discoverEmpty: "No related notes found",
-    discoverGlobalEmpty: "No Cold notes found. Cold notes are isolated (no links, not recent) — they appear when you add unlinked files to your vault.",
     discoverNoIndex: "Build index first",
     discoverComputing: "Computing...",
     discoverGlobalDesc: "Notes most related to your active thinking but not yet explored",
@@ -331,6 +330,8 @@ const en: Locale = {
     noticeUpdated: (updated, total, hot) =>
         `Vault Curate: Updated ${updated} notes (total: ${total}, hot: ${hot})`,
     noticeEmptySkipped: (n) => `Vault Curate: skipped ${n} empty note(s) — no content to embed`,
+    noticeLargeVault: (chunks) =>
+        `Vault Curate: indexed ${chunks} chunks. Semantic search may take a few seconds — if it feels slow, try setting search scope to "Hot" in Settings → Advanced.`,
     discoverGlobalNoHot: "No Hot notes yet — add internal links or recent notes to populate Hot, then Discover can surface related Cold notes against them.",
     discoverGlobalNoCold: "No Cold notes — every note in your vault is either linked or recent, so there's nothing to rediscover.",
     discoverGlobalAllFiltered: "All Cold candidates scored below the minimum threshold — lower 'Min score' in Settings → Advanced to surface lower-confidence matches.",
@@ -480,7 +481,6 @@ const zhTW: Locale = {
     discoverGlobal: "全域",
     discoverRelatedTo: (title) => `相關於：${title}`,
     discoverEmpty: "找不到相關筆記",
-    discoverGlobalEmpty: "沒有 Cold 筆記。Cold 筆記是孤立的（無連結、非近期）——將未整理的檔案加入 vault 後就會出現。",
     discoverNoIndex: "請先建立索引",
     discoverComputing: "計算中...",
     discoverGlobalDesc: "與你目前思路最相關但尚未探索的筆記",
@@ -536,6 +536,8 @@ const zhTW: Locale = {
     noticeUpdated: (updated, total, hot) =>
         `Vault Curate：已更新 ${updated} 篇（共 ${total} 篇，${hot} hot）`,
     noticeEmptySkipped: (n) => `Vault Curate：略過 ${n} 篇空白筆記（無內容可索引）`,
+    noticeLargeVault: (chunks) =>
+        `Vault Curate：完成 ${chunks} 個 chunks 索引。語意搜尋可能需要數秒；若感到慢，可至「設定 → 進階 → 搜尋範圍」改為 Hot only。`,
     discoverGlobalNoHot: "目前沒有 Hot 筆記 — 加入 internal link 或近期建立筆記後 Hot 池子會浮現，才能用發掘找相關的 Cold 筆記。",
     discoverGlobalNoCold: "目前沒有 Cold 筆記 — vault 中所有筆記都有連結或近期建立，沒有可重新發現的內容。",
     discoverGlobalAllFiltered: "所有 Cold 候選筆記分數低於最低門檻 — 請至「設定 → 進階 → 最低分數」調低後重試。",

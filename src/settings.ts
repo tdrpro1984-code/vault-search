@@ -166,6 +166,12 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             try {
                 await this.plugin.reloadBackends();
             } catch {
+                // Roll back the persisted setting + UI so we don't leave the
+                // dropdown showing a model that the backend never accepted.
+                // reloadBackends already showed a Notice to the user.
+                this.plugin.settings.ollamaModel = old;
+                await this.plugin.saveSettings();
+                this.display();
                 return;
             }
             void this.plugin.rebuildIndex();

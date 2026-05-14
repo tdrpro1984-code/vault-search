@@ -321,15 +321,18 @@ export async function applyOnboardingChoice(
     await plugin.saveSettings();
 
     // Mark onboarding as handled — even pure dismiss flows set this, so
-    // the modal stops re-appearing on every launch. A later "rebuild from
-    // settings" path clears it via `Re-show onboarding` dev command.
+    // the modal stops re-appearing on every launch. We clear it on backend
+    // failure below so the user gets a second chance.
     plugin.store?.setMeta("onboarding_dismissed", "1");
 
     try {
         await plugin.reloadBackends();
     } catch {
-        // reloadBackends already showed a Notice. Don't propagate so the
-        // onboarding "complete" path doesn't leak an unhandled rejection.
+        // reloadBackends already showed a Notice. Clear the dismissed flag
+        // so the user sees onboarding on next launch and can retry the
+        // provider settings — otherwise they're stuck in broken-backend
+        // state with no obvious recovery path.
+        plugin.store?.setMeta("onboarding_dismissed", "");
         return;
     }
 

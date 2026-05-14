@@ -30,6 +30,10 @@ import { t } from "./i18n";
 
 const EMBED_BATCH_SIZE = 8;
 const PROGRESS_STEP = 1;
+// runSemantic does a full-table cosine sweep. Past this chunk count the
+// per-query latency creeps above a few seconds on average hardware, so we
+// warn the user once at rebuild time rather than per-search.
+const LARGE_VAULT_CHUNK_THRESHOLD = 15000;
 
 export class Indexer {
     indexing = false;
@@ -158,7 +162,11 @@ export class Indexer {
         if (this.emptySkippedCount > 0) {
             new Notice(t.noticeEmptySkipped(this.emptySkippedCount), 6000);
         }
-        console.debug(`vault-curate: rebuild complete — ${done - failed} notes (${failed} failed, ${this.emptySkippedCount} empty)`);
+        const chunkCount = this.store.countChunks();
+        if (chunkCount > LARGE_VAULT_CHUNK_THRESHOLD) {
+            new Notice(t.noticeLargeVault(chunkCount), 10000);
+        }
+        console.debug(`vault-curate: rebuild complete — ${done - failed} notes (${failed} failed, ${this.emptySkippedCount} empty, ${chunkCount} chunks)`);
     }
 
     /**
@@ -172,10 +180,17 @@ export class Indexer {
         if (this.store.isDisposed) return;
         this.emptySkippedCount = 0;
 
+        // Trigger rebuild when:
+        //   - has an existing index (last_indexed_at present), AND
+        //   - tokenizer version doesn't match (null = pre-r2 index that never
+        //     wrote the key; mismatch = real upgrade)
+        // Skip for fresh installs (no last_indexed_at) so the first scan isn't
+        // wasted on "rebuild" against an empty store.
         const storedTokenizer = this.store.getMeta("cjk_tokenizer_version");
-        if (storedTokenizer && storedTokenizer !== TOKENIZER_VERSION) {
+        const hasIndex = !!this.store.getMeta("last_indexed_at");
+        if (hasIndex && storedTokenizer !== TOKENIZER_VERSION) {
             new Notice(
-                `vault-curate: tokenizer upgraded (${storedTokenizer} → ${TOKENIZER_VERSION}). Rebuilding index...`,
+                `vault-curate: tokenizer upgraded (${storedTokenizer ?? "v1"} → ${TOKENIZER_VERSION}). Rebuilding index...`,
                 8000,
             );
             await this.rebuild();

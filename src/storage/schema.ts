@@ -69,16 +69,40 @@ export function applySchema(db: Database): void {
         ? String(existing[0].values[0][0])
         : null;
 
-    if (currentVersion === null) {
-        db.run("INSERT INTO meta(key, value) VALUES('schema_version', ?)", [SCHEMA_VERSION]);
-        return;
-    }
-
-    if (currentVersion === '1') {
+    // Helper: backfill `bootstrapped` for any path where the user already has
+    // a successful index but is missing the sticky auto-index flag.
+    const backfillBootstrapped = () => {
         const lastIndexed = db.exec("SELECT value FROM meta WHERE key='last_indexed_at'");
         if (lastIndexed.length > 0 && lastIndexed[0].values.length > 0) {
             db.run("INSERT OR REPLACE INTO meta(key, value) VALUES('bootstrapped', '1')");
         }
-        db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
+    };
+
+    if (currentVersion === null) {
+        // Fresh install OR pre-existing SQLite db that never got schema_version
+        // (dev rough patches before Phase 2 commit, or corruption).
+        db.run("INSERT INTO meta(key, value) VALUES('schema_version', ?)", [SCHEMA_VERSION]);
+        backfillBootstrapped();
+        return;
     }
+
+    if (currentVersion === '1') {
+        backfillBootstrapped();
+        db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
+        return;
+    }
+
+    if (currentVersion === SCHEMA_VERSION) {
+        // No-op: at the latest version.
+        return;
+    }
+
+    // Unknown / corrupted schema_version (e.g. "v1", "banana", "1.0", empty
+    // string). Don't crash — log + force-normalise to latest + backfill any
+    // missing sticky flags so the plugin stays usable.
+    console.warn(
+        `vault-curate: unrecognised schema_version "${currentVersion}" — resetting to ${SCHEMA_VERSION}`,
+    );
+    backfillBootstrapped();
+    db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
 }

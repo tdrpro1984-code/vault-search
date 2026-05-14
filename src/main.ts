@@ -610,7 +610,7 @@ export default class VaultSearchPlugin extends Plugin {
         // searchHybrid's full-chunk cosine sweep.
         const tr = Number(this.settings.topResults);
         this.settings.topResults = Number.isFinite(tr) && tr > 0
-            ? Math.min(tr, 100)
+            ? Math.min(Math.trunc(tr), 100)
             : DEFAULT_SETTINGS.topResults;
 
         // Phase 8 (004 rebrand): strip legacy v0.3.x fields that were carried
