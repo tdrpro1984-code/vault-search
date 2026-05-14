@@ -2,7 +2,7 @@
   "id": "vault-curate",
   "name": "Vault Curate",
   "version": "1.0.0",
-  "minAppVersion": "1.0.0",
+  "minAppVersion": "1.7.2",
   "description": "High-quality Chinese-friendly semantic search, with optional AI curation.",
   "author": "Jacob Mei",
   "authorUrl": "https://github.com/notoriouslab",

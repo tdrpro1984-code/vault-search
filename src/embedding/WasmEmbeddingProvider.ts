@@ -83,17 +83,17 @@ export class WasmEmbeddingProvider implements EmbeddingProvider {
         }
         const id = this.nextEmbedId++;
         return new Promise<Float32Array[]>((resolve, reject) => {
-            const timer = setTimeout(() => {
+            const timer = window.setTimeout(() => {
                 this.pending.delete(id);
                 reject(new Error(`WASM embed timeout (${EMBED_TIMEOUT_MS / 1000}s)`));
             }, EMBED_TIMEOUT_MS);
             this.pending.set(id, {
                 resolve: (vecs) => {
-                    clearTimeout(timer);
+                    window.clearTimeout(timer);
                     resolve(vecs);
                 },
                 reject: (err) => {
-                    clearTimeout(timer);
+                    window.clearTimeout(timer);
                     reject(err);
                 },
             });

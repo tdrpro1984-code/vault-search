@@ -150,7 +150,7 @@ export class Indexer {
             done++;
             if (done % PROGRESS_STEP === 0 || done === files.length) {
                 progress.setMessage(t.noticeIndexing(done, files.length));
-                await new Promise(r => setTimeout(r, 0));
+                await new Promise(r => window.setTimeout(r, 0));
             }
         }
 
@@ -253,7 +253,7 @@ export class Indexer {
             done++;
             if (done % PROGRESS_STEP === 0 || done === toReindex.length) {
                 progress.setMessage(t.noticeIndexing(done, toReindex.length));
-                await new Promise(r => setTimeout(r, 0));
+                await new Promise(r => window.setTimeout(r, 0));
             }
         }
         progress.hide();

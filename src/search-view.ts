@@ -17,7 +17,6 @@ import { discoverForNoteSqlite, globalDiscoverSqlite } from "./search/discoverSq
 import { classifyMocSize } from "./clustering";
 import { FallbackToFlatError, generateMocGrouped, NoteForMoc, renderMocGrouped } from "./moc-generator";
 import { t } from "./i18n";
-import { expandQuery } from "./synonyms";
 
 export const VIEW_TYPE_SEARCH = "vault-curate-view";
 
@@ -37,7 +36,7 @@ export class SearchView extends ItemView {
     private inputEl!: HTMLInputElement;
     private searchResultsEl!: HTMLDivElement;
     private searchStatusEl!: HTMLDivElement;
-    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private debounceTimer: number | null = null;
     private currentQuery = "";
     private lastResults: SearchResult[] = [];
 
@@ -104,8 +103,8 @@ export class SearchView extends ItemView {
         this.tabEls.search.toggleClass("is-active", id === "search");
         this.tabEls.discover.toggleClass("is-active", id === "discover");
 
-        this.searchContainer.style.display = id === "search" ? "" : "none";
-        this.discoverContainer.style.display = id === "discover" ? "" : "none";
+        this.searchContainer.toggleClass("vault-curate-hidden", id !== "search");
+        this.discoverContainer.toggleClass("vault-curate-hidden", id !== "discover");
 
         if (id === "search") {
             this.inputEl?.focus();
@@ -157,19 +156,19 @@ export class SearchView extends ItemView {
 
     async onClose() {
         await super.onClose();
-        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
         this.globalCancelled.value = true;
     }
 
     private scheduleSearch(query: string) {
-        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
         if (!query || query.length < 2) {
             this.searchResultsEl.empty();
             this.searchStatusEl.setText("");
             return;
         }
         this.searchStatusEl.setText(t.searching);
-        this.debounceTimer = setTimeout(() => { void this.executeSearch(query); }, 300);
+        this.debounceTimer = window.setTimeout(() => { void this.executeSearch(query); }, 300);
     }
 
     private async executeSearch(query: string) {
@@ -677,17 +676,19 @@ export class SearchView extends ItemView {
             text: t.btnDescGenerate,
             cls: "vault-curate-desc-btn",
         });
-        btn.addEventListener("click", async (e) => {
+        btn.addEventListener("click", (e) => {
             e.stopPropagation();
-            btn.setAttribute("disabled", "true");
-            btn.setText(t.descGenerating(0, 1));
-            const ok = await this.plugin.descGenerator.generateForActiveNote(file);
-            if (ok) {
-                btn.remove();
-            } else {
-                btn.removeAttribute("disabled");
-                btn.setText(t.btnDescGenerate);
-            }
+            void (async () => {
+                btn.setAttribute("disabled", "true");
+                btn.setText(t.descGenerating(0, 1));
+                const ok = await this.plugin.descGenerator.generateForActiveNote(file);
+                if (ok) {
+                    btn.remove();
+                } else {
+                    btn.removeAttribute("disabled");
+                    btn.setText(t.btnDescGenerate);
+                }
+            })();
         });
     }
 }

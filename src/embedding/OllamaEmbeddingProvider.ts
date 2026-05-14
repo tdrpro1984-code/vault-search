@@ -94,11 +94,11 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: number;
     return Promise.race([
-        p.finally(() => clearTimeout(timer)),
+        p.finally(() => window.clearTimeout(timer)),
         new Promise<never>((_, rej) => {
-            timer = setTimeout(() => rej(new Error(`${label} timeout (${ms / 1000}s)`)), ms);
+            timer = window.setTimeout(() => rej(new Error(`${label} timeout (${ms / 1000}s)`)), ms);
         }),
     ]);
 }

@@ -1,3 +1,10 @@
+/* Generic display toggle used by tab switching + provider endpoint reveal.
+   Defined as a class so source TS can use addClass/removeClass/toggleClass
+   instead of element.style.display (which Obsidian lint flags). */
+.vault-curate-hidden {
+    display: none !important;
+}
+
 /* Shared styles (modal + sidebar) */
 .vault-curate-title-row {
     display: flex;

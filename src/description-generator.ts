@@ -109,7 +109,7 @@ export class DescriptionGenerator {
             if (success) ok++;
             else failed++;
             progress.setMessage(t.descGenerating(i + 1, files.length));
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => window.setTimeout(r, 0));
         }
         progress.hide();
         new Notice(t.descBatchDone(ok, failed), 8000);

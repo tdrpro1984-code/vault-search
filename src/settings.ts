@@ -36,11 +36,11 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             .setName(t.embeddingProvider);
         // setDesc with \n is collapsed in Obsidian; build a fragment so each
         // line shows on its own.
-        const descFrag = document.createDocumentFragment();
+        const descFrag = activeDocument.createDocumentFragment();
         const lines = t.embeddingProviderDesc.split("\n");
         for (let i = 0; i < lines.length; i++) {
-            if (i > 0) descFrag.appendChild(document.createElement("br"));
-            descFrag.appendChild(document.createTextNode(lines[i]));
+            if (i > 0) descFrag.appendChild(activeDocument.createElement("br"));
+            descFrag.appendChild(activeDocument.createTextNode(lines[i]));
         }
         // If the backend failed to initialise at onload, the dropdown is
         // disabled — changing it would swap `this.provider` but
@@ -49,8 +49,8 @@ export class VaultSearchSettingTab extends PluginSettingTab {
         // of letting the user fight a broken dropdown.
         const backendReady = !!this.plugin.indexer;
         if (!backendReady) {
-            descFrag.appendChild(document.createElement("br"));
-            const warn = document.createElement("strong");
+            descFrag.appendChild(activeDocument.createElement("br"));
+            const warn = activeDocument.createElement("strong");
             warn.textContent = t.backendNotReady;
             descFrag.appendChild(warn);
         }

@@ -9,7 +9,7 @@ export class SearchModal extends SuggestModal<SearchResult> {
     private plugin: VaultSearchPlugin;
     private lastResults: SearchResult[] = [];
     private lastQuery = "";
-    private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    private debounceTimer: number | null = null;
 
     constructor(app: typeof SuggestModal.prototype.app, plugin: VaultSearchPlugin) {
         super(app);
@@ -47,8 +47,8 @@ export class SearchModal extends SuggestModal<SearchResult> {
     }
 
     private scheduleSearch(query: string) {
-        if (this.debounceTimer) clearTimeout(this.debounceTimer);
-        this.debounceTimer = setTimeout(() => { void this.executeSearch(query); }, 300);
+        if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
+        this.debounceTimer = window.setTimeout(() => { void this.executeSearch(query); }, 300);
     }
 
     private async executeSearch(query: string) {
@@ -72,6 +72,6 @@ export class SearchModal extends SuggestModal<SearchResult> {
     }
 
     onClose() {
-        if (this.debounceTimer) clearTimeout(this.debounceTimer);
+        if (this.debounceTimer) window.clearTimeout(this.debounceTimer);
     }
 }

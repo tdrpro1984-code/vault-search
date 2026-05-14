@@ -207,16 +207,16 @@ export async function embedText(
 const EMBED_TIMEOUT_MS = 30000;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    let timer: ReturnType<typeof setTimeout>;
+    let timer: number;
     // Swallow late rejection — if the timeout wins the race, a subsequent
     // rejection from `promise` would otherwise surface as an unhandled
     // rejection in the renderer console. Mirrors the same pattern in
     // OnboardingModal.withTimeout.
     void promise.catch(() => { /* late rejection swallowed by design */ });
     return Promise.race([
-        promise.finally(() => clearTimeout(timer)),
+        promise.finally(() => window.clearTimeout(timer)),
         new Promise<never>((_, reject) => {
-            timer = setTimeout(() => reject(new Error(`${label} timeout (${ms / 1000}s)`)), ms);
+            timer = window.setTimeout(() => reject(new Error(`${label} timeout (${ms / 1000}s)`)), ms);
         }),
     ]);
 }

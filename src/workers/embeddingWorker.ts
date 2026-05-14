@@ -83,7 +83,9 @@ async function handleInit(msg: InitMsg): Promise<void> {
     // `return_path = true` branch then breaks model loading.
     // Removing `process` outright forces the browser path. Must happen
     // BEFORE the transformers dynamic import below.
-    Object.defineProperty(globalThis, 'process', {
+    // Worker scope has no `window`. `self` is the WorkerGlobalScope and is
+    // the lint-friendly substitute for `globalThis` here.
+    Object.defineProperty(self, 'process', {
         get: () => undefined,
         configurable: true,
     });
@@ -102,13 +104,31 @@ async function handleInit(msg: InitMsg): Promise<void> {
     }
 
     // ORT wasm tuning still applies to the wasm fallback path. WebGPU
-    // path ignores these.
+    // path ignores these. Also point ort at the inlined WASM binary (see
+    // esbuild.config.mjs / inlineOrtWasmPlugin) so the worker doesn't fall
+    // back to fetching ort-wasm-simd-threaded.wasm from cdn.jsdelivr.net at
+    // runtime — Obsidian Community store users only get main.js, and the
+    // GFW-bound Chinese audience can't rely on jsdelivr anyway.
+    const ortWasmBytes = (await import('@inline/ort-wasm')).default as Uint8Array;
+    // Re-wrap so the Blob spec sees a plain ArrayBuffer-backed Uint8Array
+    // (TS lib types reject SharedArrayBuffer-backed views here).
+    const ortWasmBlob = new Blob([new Uint8Array(ortWasmBytes)], { type: 'application/wasm' });
+    const ortWasmUrl = URL.createObjectURL(ortWasmBlob);
     const ortWasm = (tfm.env as unknown as {
-        backends?: { onnx?: { wasm?: { proxy?: boolean; numThreads?: number } } };
+        backends?: {
+            onnx?: {
+                wasm?: {
+                    proxy?: boolean;
+                    numThreads?: number;
+                    wasmPaths?: string | Record<string, string>;
+                };
+            };
+        };
     }).backends?.onnx?.wasm;
     if (ortWasm) {
         ortWasm.proxy = false;
         ortWasm.numThreads = 1;
+        ortWasm.wasmPaths = { 'ort-wasm-simd-threaded.wasm': ortWasmUrl };
     }
 
     const pipeline = tfm.pipeline;

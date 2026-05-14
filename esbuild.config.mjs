@@ -1,6 +1,6 @@
 import esbuild from 'esbuild';
 import path from 'path';
-import { copyFileSync, existsSync } from 'fs';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 
 const prod = process.argv[2] === 'production';
 
@@ -13,9 +13,12 @@ const banner = `/*
 const PLUGIN_ROOT = path.resolve('.');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Ship onnxruntime-web WASM binary as a sibling file.
-// main.js reads it at load time and transfers it to the embedding Web Worker on
-// init, so the WASM never lives as a JS literal inside main.js or worker.js.
+// Self-contained bundling: ort WASM is inlined into worker.js (via binary
+// loader on the @inline/ort-wasm magic import), and worker.js is inlined into
+// main.js as a string (via text loader on the @inline/worker magic import).
+// Result: a single main.js ships everything, so Obsidian Community store
+// (which only fetches main.js + manifest + styles) gets a fully working plugin
+// without depending on cdn.jsdelivr.net at runtime.
 // ─────────────────────────────────────────────────────────────────────────────
 const ortWasmSrc = path.resolve(
   './node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm',
@@ -25,7 +28,44 @@ if (!existsSync(ortWasmSrc)) {
     `Missing onnxruntime-web WASM at ${ortWasmSrc}. Did npm install onnxruntime-web run?`,
   );
 }
-copyFileSync(ortWasmSrc, path.join(PLUGIN_ROOT, 'ort-wasm-simd-threaded.wasm'));
+
+const inlineOrtWasmPlugin = {
+  name: 'inline-ort-wasm',
+  setup(build) {
+    build.onResolve({ filter: /^@inline\/ort-wasm$/ }, () => ({
+      path: ortWasmSrc,
+      namespace: 'inline-wasm',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'inline-wasm' }, () => ({
+      contents: readFileSync(ortWasmSrc),
+      loader: 'binary',
+    }));
+  },
+};
+
+const WORKER_BUNDLE_PATH = path.join(PLUGIN_ROOT, 'worker.js');
+
+const inlineWorkerSourcePlugin = {
+  name: 'inline-worker-source',
+  setup(build) {
+    build.onResolve({ filter: /^@inline\/worker$/ }, () => ({
+      path: WORKER_BUNDLE_PATH,
+      namespace: 'inline-worker',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'inline-worker' }, () => {
+      if (!existsSync(WORKER_BUNDLE_PATH)) {
+        throw new Error(
+          `Worker bundle not built yet at ${WORKER_BUNDLE_PATH}. Step 1 must run before Step 2.`,
+        );
+      }
+      const src = readFileSync(WORKER_BUNDLE_PATH, 'utf-8');
+      return {
+        contents: `export default ${JSON.stringify(src)};`,
+        loader: 'js',
+      };
+    });
+  },
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Workaround 1: Electron dedicated workers expose process.release.name === "node".
@@ -113,8 +153,8 @@ await esbuild.build({
     'onnxruntime-web/webgpu':
       './node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs',
   },
-  plugins: [nativeStubPlugin],
-  outfile: path.join(PLUGIN_ROOT, 'worker.js'),
+  plugins: [nativeStubPlugin, inlineOrtWasmPlugin],
+  outfile: WORKER_BUNDLE_PATH,
   define: {
     'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development'),
   },
@@ -139,12 +179,20 @@ const context = await esbuild.context({
   treeShaking: true,
   minify: prod,
   outfile: path.join(PLUGIN_ROOT, 'main.js'),
-  plugins: [nativeStubPlugin],
+  plugins: [nativeStubPlugin, inlineWorkerSourcePlugin],
 });
 
 if (prod) {
   await context.rebuild();
   await context.dispose();
+  // Worker source + ort WASM are now inlined into main.js. The sibling files
+  // produced during the worker build (worker.js, plus any leftover sibling
+  // WASM from older builds) are no longer needed. Delete them so the release
+  // ships exactly 3 assets — main.js, manifest.json, styles.css.
+  for (const f of ['worker.js', 'ort-wasm-simd-threaded.wasm']) {
+    const p = path.join(PLUGIN_ROOT, f);
+    if (existsSync(p)) unlinkSync(p);
+  }
   process.exit(0);
 }
 

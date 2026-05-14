@@ -68,7 +68,7 @@ const IDLE_FLUSH_MS = 30_000;
 export class SQLiteStore {
     private db!: Database;
     private mutationCount = 0;
-    private idleTimer: ReturnType<typeof setTimeout> | null = null;
+    private idleTimer: number | null = null;
     private flushInFlight: Promise<void> | null = null;
     private disposed = false;
 
@@ -326,11 +326,11 @@ export class SQLiteStore {
 
     private touch(force = false): void {
         this.mutationCount++;
-        if (this.idleTimer) clearTimeout(this.idleTimer);
+        if (this.idleTimer) window.clearTimeout(this.idleTimer);
         if (force || this.mutationCount >= MUTATION_THRESHOLD) {
             void this.flush();
         } else {
-            this.idleTimer = setTimeout(() => void this.flush(), IDLE_FLUSH_MS);
+            this.idleTimer = window.setTimeout(() => void this.flush(), IDLE_FLUSH_MS);
         }
     }
 
@@ -341,7 +341,7 @@ export class SQLiteStore {
         this.flushInFlight = (async () => {
             try {
                 if (this.idleTimer) {
-                    clearTimeout(this.idleTimer);
+                    window.clearTimeout(this.idleTimer);
                     this.idleTimer = null;
                 }
                 const bytes = exportDb(this.db);
@@ -358,7 +358,7 @@ export class SQLiteStore {
         if (this.disposed) return;
         this.disposed = true;
         if (this.idleTimer) {
-            clearTimeout(this.idleTimer);
+            window.clearTimeout(this.idleTimer);
             this.idleTimer = null;
         }
         if (this.mutationCount > 0) await this.flush();

@@ -61,8 +61,7 @@ export class OnboardingModal extends Modal {
         this.buildProviderOption(providerGroup, "ollama", t.embeddingProviderOllama, "");
         this.buildProviderOption(providerGroup, "openai-compatible", t.embeddingProviderOpenAI, "");
 
-        this.endpointBody = this.contentEl.createDiv({ cls: "vault-curate-onboarding-endpoint" });
-        this.endpointBody.style.display = "none";
+        this.endpointBody = this.contentEl.createDiv({ cls: "vault-curate-onboarding-endpoint vault-curate-hidden" });
         this.buildOpenAIFields(this.endpointBody);
 
         this.contentEl.createEl("h4", { text: t.onboardingAIHeading });
@@ -147,7 +146,7 @@ export class OnboardingModal extends Modal {
         radio.addEventListener("change", () => {
             if (radio.checked) {
                 this.chosenProvider = value;
-                this.endpointBody.style.display = value === "openai-compatible" ? "" : "none";
+                this.endpointBody.toggleClass("vault-curate-hidden", value !== "openai-compatible");
             }
         });
     }
@@ -176,12 +175,14 @@ export class OnboardingModal extends Modal {
         const testRow = parent.createDiv({ cls: "vault-curate-onboarding-test" });
         const testBtn = testRow.createEl("button", { text: t.onboardingTestConnection });
         const testStatus = testRow.createSpan({ cls: "vault-curate-onboarding-test-status" });
-        testBtn.addEventListener("click", async () => {
-            if (this.isClosed) return;
-            testStatus.setText("...");
-            const ok = await this.testOpenAI(this.openaiUrl, this.openaiKey);
-            if (this.isClosed) return;
-            testStatus.setText(ok ? t.onboardingTestOk : t.onboardingTestFail);
+        testBtn.addEventListener("click", () => {
+            void (async () => {
+                if (this.isClosed) return;
+                testStatus.setText("...");
+                const ok = await this.testOpenAI(this.openaiUrl, this.openaiKey);
+                if (this.isClosed) return;
+                testStatus.setText(ok ? t.onboardingTestOk : t.onboardingTestFail);
+            })();
         });
     }
 
@@ -284,16 +285,16 @@ export class OnboardingModal extends Modal {
  * the modal forever — `requestUrl` itself has no timeout knob.
  */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timer: number | undefined;
     // Attach a no-op catch so a late rejection from the underlying promise
     // (arriving AFTER the timeout already won the race) doesn't surface as
     // an unhandled-rejection warning in the console.
     void promise.catch(() => { /* late rejection swallowed by design */ });
     const timeout = new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
+        timer = window.setTimeout(() => reject(new Error(`timeout after ${ms}ms`)), ms);
     });
     return Promise.race([
-        promise.finally(() => { if (timer) clearTimeout(timer); }),
+        promise.finally(() => { if (timer) window.clearTimeout(timer); }),
         timeout,
     ]);
 }

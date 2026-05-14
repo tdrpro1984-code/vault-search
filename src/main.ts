@@ -1,4 +1,5 @@
 import { Menu, normalizePath, Notice, Plugin, TFile, requestUrl } from "obsidian";
+import workerSource from "@inline/worker";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import {
     createProvider,
@@ -26,7 +27,7 @@ export default class VaultSearchPlugin extends Plugin {
     descGenerator!: DescriptionGenerator;
     store: SQLiteStore | null = null;
     provider: EmbeddingProvider | null = null;
-    private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+    private debounceTimers: Map<string, number> = new Map();
 
     async onload() {
         await this.loadSettings();
@@ -242,9 +243,9 @@ export default class VaultSearchPlugin extends Plugin {
     }
     onunload() {
         for (const timer of this.debounceTimers.values()) {
-            clearTimeout(timer);
+            window.clearTimeout(timer);
         }
-        if (this.activeDiscoverTimer) clearTimeout(this.activeDiscoverTimer);
+        if (this.activeDiscoverTimer) window.clearTimeout(this.activeDiscoverTimer);
         // Best-effort flush + dispose. We cannot await in onunload, but
         // SQLiteStore.dispose() flushes synchronously when pending mutations.
         void this.store?.dispose();
@@ -256,8 +257,8 @@ export default class VaultSearchPlugin extends Plugin {
     showOnboardingModal() {
         // Clear the dismissed flag so a Skip from this re-run doesn't stick.
         this.store?.setMeta("onboarding_dismissed", "");
-        new OnboardingModal(this.app, this, async (choice) => {
-            await applyOnboardingChoice(this, choice);
+        new OnboardingModal(this.app, this, (choice) => {
+            void applyOnboardingChoice(this, choice);
         }).open();
     }
 
@@ -281,14 +282,14 @@ export default class VaultSearchPlugin extends Plugin {
 
     // ── Active Discovery ────────────────────────────────
 
-    private activeDiscoverTimer: ReturnType<typeof setTimeout> | null = null;
+    private activeDiscoverTimer: number | null = null;
     private lastDiscoverPath: string | null = null;
 
     private onActiveFileChange(file: TFile) {
         if (file.extension !== "md") return;
         if (file.path === this.lastDiscoverPath) return;
-        if (this.activeDiscoverTimer) clearTimeout(this.activeDiscoverTimer);
-        this.activeDiscoverTimer = setTimeout(() => {
+        if (this.activeDiscoverTimer) window.clearTimeout(this.activeDiscoverTimer);
+        this.activeDiscoverTimer = window.setTimeout(() => {
             this.lastDiscoverPath = file.path;
             const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)[0];
             if (!leaf) return;
@@ -418,11 +419,11 @@ export default class VaultSearchPlugin extends Plugin {
         if (!this.store.getMeta("bootstrapped")) return;
 
         const existing = this.debounceTimers.get(file.path);
-        if (existing) clearTimeout(existing);
+        if (existing) window.clearTimeout(existing);
 
         this.debounceTimers.set(
             file.path,
-            setTimeout(() => {
+            window.setTimeout(() => {
                 this.debounceTimers.delete(file.path);
                 if (type === "delete") {
                     this.indexer.removeNote(file.path);
@@ -472,6 +473,9 @@ export default class VaultSearchPlugin extends Plugin {
                 return new Uint8Array(buf);
             },
             write: async (path, bytes) => {
+                // Strip view metadata to get a plain ArrayBuffer for writeBinary.
+                // (TS lib types ArrayBufferLike as ArrayBuffer | SharedArrayBuffer,
+                // but Obsidian's signature wants ArrayBuffer specifically.)
                 const ab = bytes.buffer.slice(
                     bytes.byteOffset,
                     bytes.byteOffset + bytes.byteLength,
@@ -510,7 +514,6 @@ export default class VaultSearchPlugin extends Plugin {
 
         const providerType = this.settings.embeddingProvider;
         if (providerType === "wasm") {
-            const workerSource = await this.readWorkerSource();
             return createProvider(
                 {
                     providerType: "wasm",
@@ -541,16 +544,6 @@ export default class VaultSearchPlugin extends Plugin {
             };
 
         return createProvider(cfg, { httpFetch });
-    }
-
-    private async readWorkerSource(): Promise<string> {
-        const manifestDir = this.manifest.dir;
-        if (!manifestDir) throw new Error("WASM provider: manifest.dir is undefined");
-        const workerPath = normalizePath(`${manifestDir}/worker.js`);
-        if (!(await this.app.vault.adapter.exists(workerPath))) {
-            throw new Error(`WASM provider: worker.js not found at ${workerPath}`);
-        }
-        return this.app.vault.adapter.read(workerPath);
     }
 
     /** Tear down old provider/store, build new from current settings. Used after Settings save. */

@@ -62,7 +62,7 @@ export async function discoverForNoteSqlite(
             score,
             tier: row.tier ?? "hot",
         });
-        if ((i + 1) % YIELD_EVERY === 0) await new Promise(r => setTimeout(r, 0));
+        if ((i + 1) % YIELD_EVERY === 0) await new Promise(r => window.setTimeout(r, 0));
     }
 
     if (dimMismatchCount > 0) {
@@ -123,7 +123,7 @@ export async function globalDiscoverSqlite(
         }
         if ((i + 1) % YIELD_EVERY === 0) {
             onProgress?.(i + 1, cold.length);
-            await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => window.setTimeout(r, 0));
         }
     }
     // Skip the final "complete" progress callback on cancel — otherwise the
