@@ -13,6 +13,8 @@
 
 [繁體中文](./README.zh-TW.md)
 
+![Vault Curate](./docs/intro.jpg)
+
 </div>
 
 ---
@@ -32,8 +34,6 @@ Obsidian's built-in search is literal: think "prayer" but your note says "devoti
 | **Chinese semantic quality beats generic multilingual models** | Ships with `bge-small-zh-v1.5` (Chinese-only training). In head-to-head testing on Chinese names, religious terms, and colloquial phrases, generic MiniLM-style multilingual models miss most of the matches; Vault Curate consistently recalls the right notes. |
 | **Zero-config to run, WebGPU accelerated** | ~110 MB model downloads once. WebGPU indexing: 342 notes / 5,004 chunks in about **1m23s** (WASM fallback still works, around 27 minutes). |
 | **AI curation is opt-in, never silent** | Description generation, MOC clustering, and frontmatter rewrites all require explicit opt-in. Nothing runs LLMs in the background and nothing rewrites your notes without you asking. |
-
-![Search Panel](./docs/search-panel.png)
 
 ---
 
@@ -102,6 +102,8 @@ Two entry points:
 - Cmd/Ctrl+P → `Vault Curate: Semantic search (modal)` for quick jump
 - Sidebar → **Search** tab for persistent results
 
+![Search results + Canvas drag](./docs/search-canvas.png)
+
 ### Discover
 
 Discover works on **notes**, not query strings — it surfaces semantically related **Cold notes** you haven't touched recently:
@@ -109,6 +111,8 @@ Discover works on **notes**, not query strings — it surfaces semantically rela
 - **Current note**: when you open a file, related notes appear automatically, with Cold notes visually highlighted ("you haven't read this one")
 - **Global**: Cold notes most related to your entire Hot pool — intentional blind-spot mining
 - Results can be exported to a topic-grouped Map of Content via **Generate MOC** (falls back to a flat MOC if results are too few or too similar)
+
+![Discover sidebar — current note](./docs/discover-current-note.png)
 
 ### Hot / Cold auto-tiering
 
