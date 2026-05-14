@@ -28,6 +28,6 @@
     "vitest": "^4.1.6"
   },
   "dependencies": {
-    "hdbscan-ts": "^1.0.17"
+    "hdbscan-ts": "1.0.17"
   }
 }
