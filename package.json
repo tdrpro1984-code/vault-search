@@ -20,7 +20,7 @@
     "@huggingface/transformers": "^4.0.1",
     "@types/node": "^22.0.0",
     "@types/sql.js": "^1.4.11",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.0",
     "happy-dom": "^20.9.0",
     "obsidian": "latest",
     "sql.js": "^1.14.1",
