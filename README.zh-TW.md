@@ -199,6 +199,15 @@ AI 整理（description / MOC 命名）所用的 LLM endpoint 另外設定，相
 
 **不蒐集任何使用紀錄，不主動向任何伺服器回傳資料。**
 
+### 🔒 關於 API key 儲存
+
+Vault Curate 跟所有 Obsidian plugin 一樣，將設定（含 OpenAI API key）以明文存放於 `<vault>/.obsidian/plugins/vault-curate/data.json`。這是 Obsidian 的 plugin 儲存機制，並非 Vault Curate 獨有做法。
+
+若你的 vault 會同步到雲端服務（iCloud / Dropbox / Google Drive 等）或 push 到 public Git repository，請：
+
+1. 將 `.obsidian/plugins/vault-curate/data.json` 加入同步排除清單或 `.gitignore`
+2. 或改用**內建**模型 / **Ollama** 路徑——這兩種完全不需 API key
+
 ---
 
 ## 技術棧

@@ -32,6 +32,7 @@ const PROGRESS_STEP = 1;
 
 export class Indexer {
     indexing = false;
+    private emptySkippedCount = 0;
 
     constructor(
         private plugin: VaultSearchPlugin,
@@ -118,6 +119,7 @@ export class Indexer {
         await this.ensureProviderReady();
         if (this.store.isDisposed) return;
         this.store.clearAllData();
+        this.emptySkippedCount = 0;
 
         const files = this.getMarkdownFiles();
         if (files.length === 0) {
@@ -152,7 +154,10 @@ export class Indexer {
         await this.store.flush();
 
         new Notice(t.noticeIndexDone(done - failed, hot, cold, failed), 10000);
-        console.debug(`vault-curate: rebuild complete — ${done - failed} notes (${failed} failed)`);
+        if (this.emptySkippedCount > 0) {
+            new Notice(t.noticeEmptySkipped(this.emptySkippedCount), 6000);
+        }
+        console.debug(`vault-curate: rebuild complete — ${done - failed} notes (${failed} failed, ${this.emptySkippedCount} empty)`);
     }
 
     /**
@@ -164,6 +169,7 @@ export class Indexer {
         if (this.store.isDisposed) return;
         await this.ensureProviderReady();
         if (this.store.isDisposed) return;
+        this.emptySkippedCount = 0;
 
         const storedModel = this.store.getMeta("embedding_model_id");
         if (storedModel && storedModel !== this.provider.modelId) {
@@ -244,6 +250,9 @@ export class Indexer {
             .map(f => this.store.getNote(f.path)?.tier)
             .filter(t => t === "hot").length;
         new Notice(t.noticeUpdated(done - failed, total, hot), 10000);
+        if (this.emptySkippedCount > 0) {
+            new Notice(t.noticeEmptySkipped(this.emptySkippedCount), 6000);
+        }
     }
 
     async indexSingleFile(file: TFile): Promise<void> {
@@ -307,7 +316,8 @@ export class Indexer {
 
             if (this.store.isDisposed) return false;
             if (chunkVecs.length === 0) {
-                console.warn(`vault-curate: no chunk vectors for ${file.path}`);
+                console.warn(`vault-curate: empty body, no chunks for ${file.path}`);
+                this.emptySkippedCount++;
                 return false;
             }
 
@@ -352,5 +362,9 @@ export class Indexer {
         this.store.setMeta("embedding_model_id", this.provider.modelId);
         this.store.setMeta("embedding_dim", String(this.provider.dimension));
         this.store.setMeta("last_indexed_at", new Date().toISOString());
+        // Sticky flag: once we've ever finished a rebuild, auto-index on
+        // file events stays enabled even if clearAllData wipes the four
+        // index-state meta keys (e.g. mid-provider-switch crash).
+        this.store.setMeta("bootstrapped", "1");
     }
 }

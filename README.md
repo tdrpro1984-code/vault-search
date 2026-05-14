@@ -5,9 +5,9 @@
 [![Release](https://img.shields.io/github/v/release/notoriouslab/vault-curate?style=flat-square)](https://github.com/notoriouslab/vault-curate/releases)
 [![License](https://img.shields.io/github/license/notoriouslab/vault-curate?style=flat-square)](LICENSE)
 [![Obsidian Desktop](https://img.shields.io/badge/Obsidian-Desktop-7C3AED?style=flat-square&logo=obsidian)](https://obsidian.md/)
-[![Ollama Local AI](https://img.shields.io/badge/Ollama-Local_AI-000?style=flat-square)](https://ollama.com/)
-[![BRAT Available](https://img.shields.io/badge/BRAT-Available-blue?style=flat-square)](https://github.com/TfTHacker/obsidian42-brat)
-[![Last Commit](https://img.shields.io/github/last-commit/notoriouslab/vault-curate)](https://github.com/notoriouslab/vault-curate)
+[![WebGPU Accelerated](https://img.shields.io/badge/WebGPU-Accelerated-FF6A00?style=flat-square)]()
+[![Ollama Optional](https://img.shields.io/badge/Ollama-Optional-000?style=flat-square)](https://ollama.com/)
+[![Last Commit](https://img.shields.io/github/last-commit/notoriouslab/vault-curate?style=flat-square)](https://github.com/notoriouslab/vault-curate)
 
 **High-quality Chinese-friendly semantic search for Obsidian, with optional AI curation.**
 
@@ -19,62 +19,52 @@
 
 > ⓘ **Previously published as `vault-search`** (plugin id and repository renamed). A different plugin authored by a separate developer now occupies the `vault-search` id — see the [Upgrading from vault-search](#upgrading-from-vault-search) section below before installing if you used earlier versions.
 
-**Search by meaning. Rediscover what you forgot.** Hybrid BM25 + semantic + fuzzy ranking. Works out of the box with a built-in on-device model; opt-in AI curation generates descriptions and topic-grouped Maps of Content.
-
-![Search Panel](./docs/search-panel.png)
-
 ## Why Vault Curate?
 
-[Andrej Karpathy shared](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/) his vision of LLM-maintained knowledge bases — letting AI "compile" your notes into structured wikis. Compelling, but it asks you to hand over full editorial control.
+Obsidian's built-in search is literal: think "prayer" but your note says "devotional" and you'll miss it. Most semantic-search plugins use generic multilingual models, which tend to under-perform on Chinese content.
 
-**Vault Curate takes a different stance:** AI should help you *see*, not think for you. The best tools don't replace your writing — they help you **rediscover** what you already know and surface the connections you missed.
+[Andrej Karpathy shared](https://venturebeat.com/data/karpathy-shares-llm-knowledge-base-architecture-that-bypasses-rag-with-an/) his vision of LLM-maintained knowledge bases — letting AI "compile" your notes into structured wikis. Compelling, but it asks you to hand over full editorial control. **Vault Curate takes a different stance: AI should help you *see*, not think for you.**
 
-| What you get | What it unlocks |
+### Three differentiators
+
+| Feature | How it works |
 |---|---|
-| **Hybrid Fusion search** | BM25 (CJK trigram), semantic embeddings, and fuzzy title matching combined via Reciprocal Rank Fusion. Exact phrases, meaning, and misspellings all find the right note. |
-| **Built-in Chinese-first embedding** | `bge-small-zh-v1.5` runs entirely on your device via WebGPU (or WASM fallback). No daemon, no API key, ~110 MB one-time download. |
-| **Two-tier provider model** | Stick with the built-in model for true zero-config, or point at Ollama / any OpenAI-compatible endpoint for higher-quality models when you want them. |
-| **Discover, not organize** | The Discover tab surfaces Cold (orphan) notes semantically related to your active reading — your blind spots become visible. |
-| **Hot/Cold tiering** | Notes auto-classified by links + recency. Cold notes hiding in your vault get spotted next to your active Hot notes. |
-| **AI curation (opt-in)** | Off by default. Turn on to generate frontmatter descriptions per note, and topic-grouped Maps of Content via HDBSCAN clustering + LLM naming. |
-| **SQLite storage** | Local SQLite database for chunks, embeddings, and full-text search — no fragile `index.json` to corrupt. |
-| **Obsidian-native UX** | Sidebar Search/Discover tabs, Cmd/Ctrl+P modal, right-click file menu (Find similar / Generate description), Canvas drag-drop. |
+| **Chinese semantic quality beats generic multilingual models** | Ships with `bge-small-zh-v1.5` (Chinese-only training). In head-to-head testing on Chinese names, religious terms, and colloquial phrases, generic MiniLM-style multilingual models miss most of the matches; Vault Curate consistently recalls the right notes. |
+| **Zero-config to run, WebGPU accelerated** | ~110 MB model downloads once. WebGPU indexing: 342 notes / 5,004 chunks in about **1m23s** (WASM fallback still works, around 27 minutes). |
+| **AI curation is opt-in, never silent** | Description generation, MOC clustering, and frontmatter rewrites all require explicit opt-in. Nothing runs LLMs in the background and nothing rewrites your notes without you asking. |
+
+![Search Panel](./docs/search-panel.png)
 
 ---
 
 ## Quick Start
 
-### Path 1 — Built-in (zero-config, default)
+1. In Obsidian, go to **Settings → Community plugins** and search for **Vault Curate**
+2. After enabling, the **Welcome to Vault Curate** modal opens. Under **Embedding provider**, pick **Built-in (on-device, WebGPU)** and click **Index my vault now**
+3. After the ~110 MB model download and WebGPU indexing finish, click the sidebar compass icon and start searching
 
-1. Install the plugin (see [Installation](#installation))
-2. On first launch the **Onboarding** modal appears. Pick **Built-in** and click **Index my vault now**
-3. ~110 MB model downloads once, then indexing runs on WebGPU
-4. Open the sidebar (compass icon) and start searching
-
-### Path 2 — Ollama (advanced, higher quality)
-
-1. Install [Ollama](https://ollama.com/) and pull a model: `ollama pull qwen3-embedding:0.6b`
-2. Pick **Ollama** in the Onboarding modal, then **Index my vault now**
-3. Embeddings run against your local Ollama daemon — content never leaves the machine
+> ⚠️ Vault Curate is currently going through Obsidian's community review. If you can't find it in Community plugins yet, use the [Manual install](#manual-install) path below.
 
 ---
 
 ## Installation
 
-### Requirements
-- [Obsidian](https://obsidian.md/) desktop
-- For Path 2: [Ollama](https://ollama.com/) running locally, or any OpenAI-compatible server
+**Requirements**
+- [Obsidian](https://obsidian.md/) desktop (v1.0.0+)
+- Advanced paths only: a local [Ollama](https://ollama.com/) instance or any OpenAI-compatible server
 
-### Install
-**BRAT (recommended):**
-1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat)
-2. Add repository: `notoriouslab/vault-curate`
-3. Enable "Vault Curate" in Settings → Community plugins
+### From Community plugins (recommended)
 
-**Manual:**
-1. Download `main.js`, `manifest.json`, `styles.css`, `worker.js`, `ort-wasm-simd-threaded.wasm` from [releases](https://github.com/notoriouslab/vault-curate/releases)
-2. Copy to `.obsidian/plugins/vault-curate/` in your vault
-3. Enable in Settings → Community plugins
+1. Open **Settings → Community plugins** in Obsidian
+2. Make sure **Restricted mode** is off, click **Community plugins → Browse**
+3. Search **Vault Curate** → **Install** → **Enable**
+4. The **Welcome to Vault Curate** modal opens automatically on first launch
+
+### Manual install
+
+1. Download `main.js`, `manifest.json`, `styles.css`, `worker.js`, `ort-wasm-simd-threaded.wasm` from [Releases](https://github.com/notoriouslab/vault-curate/releases)
+2. Copy them into `.obsidian/plugins/vault-curate/` in your vault
+3. Enable in **Settings → Community plugins**
 
 > **Tip:** If your vault is Git-tracked, add `.obsidian/plugins/*/data.json` and `.obsidian/plugins/*/index.sqlite` to `.gitignore`.
 
@@ -82,67 +72,153 @@
 
 ## Upgrading from vault-search
 
-If you used the earlier `vault-search` plugin (BRAT or sideload), follow this path:
+If you used the earlier `vault-search` plugin, follow this path:
 
 1. **Open your vault folder** and locate `.obsidian/plugins/vault-search/`
 2. **Delete that folder directly** from the filesystem. ⚠️ Do *not* use Community plugins → Uninstall — a different plugin now occupies the `vault-search` id and may insert itself when you uninstall.
-3. **Install Vault Curate** via BRAT pointing at `notoriouslab/vault-curate` (see [Installation](#installation) above)
-4. **Enable** it. The first-launch Onboarding modal will rebuild your index automatically.
+3. Install Vault Curate via the [Installation](#installation) steps above
+4. **Enable**. The **Welcome to Vault Curate** modal will guide you through rebuilding the index.
 
 Embeddings are not reused across versions — a from-scratch rebuild takes ~1–2 minutes on WebGPU for a few hundred notes. Frontmatter descriptions and tags already in your notes are preserved (they live in the `.md` files, not in the index).
 
-If you had keybindings set on `vault-search:*` commands, redo them under `vault-curate:*` in Settings → Hotkeys (5 commands total).
+If you had keybindings set on `vault-search:*` commands, redo them under `vault-curate:*` in **Settings → Hotkeys** (9 commands total — see [Commands](#commands)).
 
 ---
 
-## Usage
+## Features
 
-### Search
-- **Cmd/Ctrl+P → "Vault Curate: Semantic search"** for a quick modal
-- **Sidebar → Search tab** for persistent results as you read
-- **Min score**, **Top results**, **Search scope** (Hot / All / Cold) in Settings → Advanced
+### Search (Hybrid Fusion)
+
+Three signals combined via [Reciprocal Rank Fusion](https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf) (k=60):
+
+| Path | Catches |
+|---|---|
+| **BM25** (pure TS, CJK trigram) | Exact phrases, keyword combinations |
+| **Semantic embedding** | Different wording, same meaning |
+| **Fuzzy title** (Jaro–Winkler) | Typos, spelling variants |
+
+Two entry points:
+
+- Cmd/Ctrl+P → `Vault Curate: Semantic search (modal)` for quick jump
+- Sidebar → **Search** tab for persistent results
 
 ### Discover
-- **Sidebar → Discover tab → Current note** auto-shows related notes when you open a file (Cold notes highlighted)
-- **Discover → Global** surfaces Cold notes most related to your entire Hot pool
-- **"Generate MOC" button** exports the current results as a topic-grouped Map of Content (needs AI curation on; falls back to flat MOC if results are too few or too similar)
 
-### Find Similar
-- Right-click any `.md` → **VC: Find similar notes** → results in sidebar
+Discover works on **notes**, not query strings — it surfaces semantically related **Cold notes** you haven't touched recently:
 
-### AI Curation (opt-in, off by default)
-Enable in **Settings → AI Curation → Enable AI curation**, then:
-- Right-click `.md` → **VC: Generate description** writes an LLM-generated description + tags to frontmatter
-- **Cmd/Ctrl+P → "Vault Curate: Generate descriptions for current results"** runs it across the sidebar results
-- **Cmd/Ctrl+P → "Vault Curate: Generate MOC (topic-grouped)"** runs HDBSCAN clustering then LLM-names each cluster
+- **Current note**: when you open a file, related notes appear automatically, with Cold notes visually highlighted ("you haven't read this one")
+- **Global**: Cold notes most related to your entire Hot pool — intentional blind-spot mining
+- Results can be exported to a topic-grouped Map of Content via **Generate MOC** (falls back to a flat MOC if results are too few or too similar)
+
+### Hot / Cold auto-tiering
+
+Notes are auto-classified by **internal links + recency**:
+
+- **Hot**: linked to / recently touched
+- **Cold**: orphan / untouched for a while
+
+The "recent" cutoff is tunable in **Settings → Advanced → Hot window (days)**. Cold notes don't get buried in Discover — they're exactly the content you should be re-seeing.
+
+### Find similar notes
+
+Right-click any `.md` → **VC: Find similar notes** → results show up in the sidebar; you can drag them straight to Canvas.
+
+### AI curation (off by default)
+
+Turn it on under **Settings → AI Curation → Enable AI curation** to unlock three actions:
+
+- Generate a description + tags into a single note's frontmatter
+- Run description generation across the sidebar's search / discover results
+- Generate a **topic-grouped MOC** via HDBSCAN clustering + LLM naming
+
+The LLM provider is configured separately under **Settings → AI Curation** (local Ollama or any OpenAI-compatible endpoint).
+
+---
+
+## Commands
+
+From Command Palette (Cmd/Ctrl+P), type `Vault Curate:` to see them all.
+
+| Command | What it does | Requires |
+|---|---|---|
+| `Semantic search (modal)` | Modal-style semantic search with quick jump | always available |
+| `Open search panel` | Open the sidebar panel | always available |
+| `Find similar notes` | Find semantically related notes to the active `.md` | always available |
+| `Rebuild index` | Wipe the existing index and re-index everything | always available |
+| `Update index` | Incremental update (re-index files with newer mtime) | always available |
+| `Discover related Cold notes` | Global discover: Cold notes most related to your Hot pool | always available |
+| `Generate description for active note` | LLM-write description + tags to the active file's frontmatter | AI curation on |
+| `Generate descriptions for current results` | Batch description for the current sidebar results | AI curation on |
+| `Generate MOC (topic-grouped)` | HDBSCAN cluster + LLM-name each group | AI curation on |
+
+Right-click menus expose two of these directly on a `.md`:
+
+- **VC: Find similar notes**
+- **VC: Generate description** (AI curation on)
+
+---
+
+## Settings
+
+The settings panel is split into three sections:
+
+### Quick setup
+
+| Setting | Default | Note |
+|---|---|---|
+| Embedding provider | Built-in (on-device, WebGPU) | One of three: Built-in / Ollama / OpenAI-compatible |
+| Excluded folders | (empty) | Folder globs that won't be indexed |
+
+Changing the embedding provider or model triggers a confirmation modal — the index is wiped and rebuilt.
+
+### AI Curation
+
+| Setting | Default | Note |
+|---|---|---|
+| Enable AI curation | off | When off, description / MOC commands stay hidden |
+| LLM provider | Ollama | The endpoint used for description + MOC naming |
+| LLM model | qwen3:1.7b | Recommended default; any Ollama model works |
+
+### Advanced
+
+Collapsible `<details>` block: top results / min score / Hot window (days) / default search scope (Hot / Cold / All) / chunk size + overlap / synonym list / auto-index toggle / rebuild + update buttons / index stats.
 
 ---
 
 ## Privacy
 
-Three modes, picked at Onboarding (changeable anytime in Settings):
+Three embedding modes, picked from **Quick setup → Embedding provider**:
 
 | Mode | Where embeddings run | Where note text goes |
 |---|---|---|
-| **Built-in** | On-device WebGPU / WASM | Stays on your device. |
-| **Ollama (local)** | Your local Ollama daemon on 127.0.0.1 | Stays on your device. |
-| **OpenAI-compatible** | Any endpoint you point at — local server (LM Studio, llama.cpp, etc.) *or* a remote API (OpenAI etc.) | Could leave your device — depends on the endpoint you choose. |
+| **Built-in** | On-device WebGPU / WASM | Stays on your device |
+| **Ollama (local daemon)** | Local Ollama daemon on 127.0.0.1 | Stays on your device |
+| **OpenAI-compatible API** | Any endpoint you point it at — could be local (LM Studio, llama.cpp, …) **or** remote (OpenAI etc.) | Depends on the endpoint you choose; may leave your device |
 
-The AI curation features (description / MOC naming) use whatever LLM endpoint you configure separately; the same privacy reasoning applies.
+The same applies to AI curation (description / MOC naming), which uses an independently-configured LLM endpoint.
 
-No telemetry. No usage tracking. No phone-home.
+**No telemetry. No usage tracking. Nothing is sent to any server unless you configure a remote endpoint.**
+
+### 🔒 About API key storage
+
+Vault Curate, like every Obsidian plugin, stores its settings (including any OpenAI API key) as plain text in `<vault>/.obsidian/plugins/vault-curate/data.json`. This is Obsidian's plugin storage mechanism, not a vault-curate-specific design choice.
+
+If your vault syncs to a cloud service (iCloud / Dropbox / Google Drive) or pushes to a public Git repository, you should:
+
+1. Add `.obsidian/plugins/vault-curate/data.json` to your sync exclusion list or `.gitignore`
+2. Or use the **Built-in** model / **Ollama** path — neither requires an API key
 
 ---
 
 ## Tech Stack
 
 - **TypeScript** + **esbuild** (two-stage bundle for worker + main)
-- **sql.js** (SQLite via WASM) for the storage layer
-- **Pure-TS BM25+** (`src/storage/bm25.ts`) for CJK-aware full-text search — no native FTS5 dependency
+- **sql.js** (SQLite via WASM) for the storage layer — replaces v0.x's `data.json` / `index.json`
+- **Pure-TS BM25+** (`src/storage/bm25.ts`) for CJK-aware full-text search (no native FTS5 dependency)
 - **`@huggingface/transformers`** + **`bge-small-zh-v1.5` q8** (~110 MB, WebGPU/WASM) for on-device embeddings
-- **`hdbscan-ts`** for topic clustering (MOC 2.0)
-- **Optional**: [Ollama](https://ollama.com/) / any OpenAI-compatible endpoint for higher-end embedding / LLM models
-- **Reciprocal Rank Fusion** (k=60) for combining BM25 + semantic + fuzzy signals
+- **`hdbscan-ts`** for topic clustering (MOC)
+- **Reciprocal Rank Fusion** (k=60) combining BM25 + semantic + fuzzy
+- **Optional**: [Ollama](https://ollama.com/) / any OpenAI-compatible endpoint for higher-end embedding or LLM models
 
 ---
 
@@ -154,7 +230,7 @@ cd vault-curate
 npm install
 npm run dev    # watch mode
 npm run build  # production build
-npm test       # vitest unit tests
+npm test       # vitest unit tests (59 tests)
 ```
 
 ---

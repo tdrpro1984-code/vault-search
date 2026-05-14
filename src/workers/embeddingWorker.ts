@@ -92,6 +92,11 @@ async function handleInit(msg: InitMsg): Promise<void> {
     // esbuild's alias in worker stage maps this to transformers.web.js.
     const tfm = await import('@huggingface/transformers');
     if (msg.remoteUrl) {
+        // Defence-in-depth: reject non-http(s) schemes (file:// / data: etc.)
+        // even though main thread shouldn't pass this through.
+        if (!/^https?:\/\//i.test(msg.remoteUrl)) {
+            throw new Error('Worker init: remoteUrl must use http or https scheme');
+        }
         // Optional override; default points at huggingface.co
         (tfm.env as unknown as { remoteHost: string }).remoteHost = msg.remoteUrl;
     }

@@ -80,6 +80,21 @@ export function validateServerUrl(url: string) {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
         throw new Error("Only http/https server URLs are supported");
     }
+    if (isMetadataOrLinkLocal(parsed.hostname)) {
+        throw new Error("Refusing to target link-local / cloud-metadata endpoint");
+    }
+}
+
+// Reject hosts a user has no legitimate reason to point at: cloud metadata
+// endpoints (AWS/Azure/GCP all live at 169.254.169.254, Alibaba at
+// 100.100.100.200) and IPv6 link-local. RFC 1918 private ranges (10/8,
+// 172.16/12, 192.168/16) are NOT rejected — LAN-hosted Ollama is a real use case.
+function isMetadataOrLinkLocal(rawHost: string): boolean {
+    const host = rawHost.replace(/^\[|\]$/g, "").toLowerCase();
+    if (/^169\.254\./.test(host)) return true;          // IPv4 link-local /16
+    if (/^fe[89ab][0-9a-f]?:/.test(host)) return true;  // IPv6 link-local fe80::/10
+    if (host === "100.100.100.200") return true;        // Alibaba metadata
+    return false;
 }
 
 /**

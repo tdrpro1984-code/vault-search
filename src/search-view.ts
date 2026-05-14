@@ -334,11 +334,20 @@ export class SearchView extends ItemView {
 
         if (this.globalCancelled.value) return;
 
-        this.discoverStatusEl.setText(
-            results.length > 0
-                ? t.discoverGlobalDesc
-                : t.discoverGlobalEmpty,
-        );
+        if (results.length === 0) {
+            // Distinguish why: no Hot pool vs no Cold candidates vs everything filtered out.
+            const all = store.getAllNotesLight();
+            const hasHot = all.some(r => r.tier !== "cold");
+            const hasCold = all.some(r => r.tier === "cold");
+            const msg = !hasHot
+                ? t.discoverGlobalNoHot
+                : !hasCold
+                    ? t.discoverGlobalNoCold
+                    : t.discoverGlobalEmpty;
+            this.discoverStatusEl.setText(msg);
+        } else {
+            this.discoverStatusEl.setText(t.discoverGlobalDesc);
+        }
         this.renderDiscoverResults(results);
     }
 

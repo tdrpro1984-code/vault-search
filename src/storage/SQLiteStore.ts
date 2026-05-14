@@ -292,18 +292,19 @@ export class SQLiteStore {
     /** Provider switch: clear all indexed data but preserve schema + meta.schema_version. */
     clearAllData(): void {
         if (this.disposed) return;
+        // Wrap multi-statement clear in a transaction so a crash mid-clear
+        // leaves notes + chunks consistent (no orphaned chunks rows).
         this.db.exec(`
+            BEGIN;
             DELETE FROM chunks;
             DELETE FROM notes;
-        `);
-        // Preserve schema_version; remove other meta that's now stale.
-        this.db.run(`
             DELETE FROM meta WHERE key IN (
                 'embedding_provider',
                 'embedding_model_id',
                 'embedding_dim',
                 'last_indexed_at'
-            )
+            );
+            COMMIT;
         `);
         this.touch(/*force*/ true);
     }

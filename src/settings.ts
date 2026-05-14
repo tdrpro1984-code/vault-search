@@ -218,7 +218,7 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 text.onChange(async (val) => {
                     const n = parseInt(val, 10);
                     if (!isNaN(n) && n > 0) {
-                        this.plugin.settings.topResults = n;
+                        this.plugin.settings.topResults = Math.min(n, 100);
                         await this.plugin.saveSettings();
                     }
                 });

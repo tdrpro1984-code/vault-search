@@ -25,6 +25,11 @@ function isAsciiWord(ch: string): boolean {
     return ASCII_WORD_RE.test(ch);
 }
 
+function isHighSurrogate(ch: string): boolean {
+    const code = ch.charCodeAt(0);
+    return code >= 0xd800 && code <= 0xdbff;
+}
+
 export function tokenizeCJK(text: string): string {
     if (!text) return '';
     const tokens: string[] = [];
@@ -49,6 +54,12 @@ export function tokenizeCJK(text: string): string {
             while (end < n && isAsciiWord(text[end])) end++;
             tokens.push(text.slice(i, end).toLowerCase());
             i = end;
+        } else if (isHighSurrogate(ch) && i + 1 < n) {
+            // Non-BMP codepoint (emoji, CJK Extension B+ etc.) — emit as a
+            // single token. Without this, emoji-only notes get tokenize() = ''
+            // and BM25 scores them 0.
+            tokens.push(text.slice(i, i + 2));
+            i += 2;
         } else {
             i++;
         }

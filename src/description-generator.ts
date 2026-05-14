@@ -29,7 +29,7 @@ const TAG_LENGTH_CAP = 64;
  * source file stays plain ASCII (Edit/Write tools decode raw \uXXXX in
  * regex literals, which corrupted earlier versions).
  */
-const STRIP_CONTROL_CHARS = new RegExp(
+export const STRIP_CONTROL_CHARS = new RegExp(
     "[" + "\\x00-\\x08" + "\\x0b\\x0c" + "\\x0e-\\x1f"
         + "\\x7f-\\x9f" + "\\u2028\\u2029" + "]",
     "g",
