@@ -32,18 +32,21 @@ const TAG_LENGTH_CAP = 64;
 export const STRIP_CONTROL_CHARS = new RegExp(
     "[" + "\\x00-\\x08" + "\\x0b\\x0c" + "\\x0e-\\x1f"
         + "\\x7f-\\x9f"
+        + "\\u034f"          // combining grapheme joiner (CGJ)
+        + "\\u180b-\\u180d"  // mongolian free variation selectors
         + "\\u200b-\\u200f"  // zero-width space, ZWNJ, ZWJ, LRM, RLM
         + "\\u2028\\u2029"   // line/paragraph separator
         + "\\u202a-\\u202e"  // LRE/RLE/PDF/LRO/RLO (bidi overrides — visual injection)
         + "\\u2060-\\u206f"  // word joiner + bidi isolate controls + math invisibles
+        + "\\ufe00-\\ufe0f"  // variation selectors VS1-VS16
         + "\\ufeff"          // BOM / zero-width no-break space
         + "\\ufff9-\\ufffb"  // interlinear annotation anchor/separator/terminator
         + "]",
     "g",
 );
-// Unicode Tag block U+E0000-U+E007F (plane 14 — surrogate pair). String.replace
-// with this regex strips them in a separate pass so the BMP regex above can
-// stay simple.
+// Plane 14 Unicode Tag block U+E0000-U+E007F (each codepoint encodes as a
+// surrogate pair in JS strings). The `u` flag puts the regex in code-point
+// mode so the range is matched as a single codepoint rather than two halves.
 export const STRIP_UNICODE_TAGS = /[\u{E0000}-\u{E007F}]/gu;
 
 /** Slice text safely without splitting a UTF-16 surrogate pair. */

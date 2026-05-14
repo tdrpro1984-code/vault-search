@@ -168,10 +168,18 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             } catch {
                 // Roll back the persisted setting + UI so we don't leave the
                 // dropdown showing a model that the backend never accepted.
-                // reloadBackends already showed a Notice to the user.
-                this.plugin.settings.ollamaModel = old;
-                await this.plugin.saveSettings();
-                this.display();
+                // reloadBackends already showed a Notice to the user. Wrap
+                // the rollback itself in try/catch so a secondary failure
+                // (disk full / disposed store) doesn't escape as an
+                // unhandled rejection from the onChange handler.
+                try {
+                    this.plugin.settings.ollamaModel = old;
+                    await this.plugin.saveSettings();
+                    this.display();
+                } catch {
+                    // Best-effort: rollback failed but the primary Notice
+                    // from reloadBackends already informed the user.
+                }
                 return;
             }
             void this.plugin.rebuildIndex();

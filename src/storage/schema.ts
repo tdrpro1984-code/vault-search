@@ -97,6 +97,21 @@ export function applySchema(db: Database): void {
         return;
     }
 
+    // Future-version downgrade guard: if currentVersion looks numerically
+    // greater than SCHEMA_VERSION, the user downgraded from a newer release
+    // whose db structure we don't understand. Don't normalize — that would
+    // erase the version marker and we might INSERT against incompatible v3+
+    // schema. Log and bail; the caller will see surface errors organically.
+    const currentNum = parseInt(currentVersion, 10);
+    const latestNum = parseInt(SCHEMA_VERSION, 10);
+    if (Number.isFinite(currentNum) && currentNum > latestNum) {
+        console.warn(
+            `vault-curate: schema_version "${currentVersion}" is newer than this plugin (${SCHEMA_VERSION}). ` +
+            `Refusing to downgrade — upgrade the plugin or wipe the db to continue.`,
+        );
+        return;
+    }
+
     // Unknown / corrupted schema_version (e.g. "v1", "banana", "1.0", empty
     // string). Don't crash — log + force-normalise to latest + backfill any
     // missing sticky flags so the plugin stays usable.
