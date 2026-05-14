@@ -3,9 +3,6 @@
 .spectra.yaml
 openspec/
 
-# Lock file
-package-lock.json
-
 # Build output
 main.js
 worker.js
