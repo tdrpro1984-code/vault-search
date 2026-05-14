@@ -325,7 +325,8 @@ export default class VaultSearchPlugin extends Plugin {
             const file = this.app.vault.getAbstractFileByPath(r.path);
             if (!(file instanceof TFile) || file.extension !== "md") continue;
             const cache = this.app.metadataCache.getFileCache(file);
-            const desc = cache?.frontmatter?.description as unknown;
+            const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+            const desc = fm?.description;
             if (desc === undefined || desc === null) {
                 targets.push(file);
             } else if (typeof desc === "string") {

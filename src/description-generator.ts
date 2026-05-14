@@ -283,7 +283,11 @@ export class DescriptionGenerator {
                 const parsed: unknown = JSON.parse(text);
                 if (typeof parsed !== "object" || parsed === null) return null;
                 const obj = parsed as { description?: unknown; summary?: unknown; tags?: unknown };
-                const descRaw = String(obj.description ?? obj.summary ?? "");
+                const descRaw = typeof obj.description === "string"
+                    ? obj.description
+                    : typeof obj.summary === "string"
+                        ? obj.summary
+                        : "";
                 // Strip control + C1 + line-separator code points before any
                 // further use — a poisoned LLM response could otherwise smuggle
                 // ANSI escapes, YAML-confusing line breaks, or invisible chars

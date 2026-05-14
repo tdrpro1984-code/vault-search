@@ -2,7 +2,7 @@
    Defined as a class so source TS can use addClass/removeClass/toggleClass
    instead of element.style.display (which Obsidian lint flags). */
 .vault-curate-hidden {
-    display: none !important;
+    display: none;
 }
 
 /* Shared styles (modal + sidebar) */

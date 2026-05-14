@@ -53,26 +53,28 @@ function postLog(msg: string): void {
     ctx.postMessage({ type: 'log', message: msg });
 }
 
-ctx.onmessage = async (event: MessageEvent<IncomingMsg>) => {
-    const msg = event.data;
-    try {
-        if (msg.type === 'init') {
-            await handleInit(msg);
-        } else if (msg.type === 'embed') {
-            await handleEmbed(msg);
-        } else if (msg.type === 'dispose') {
-            extractor = null;
-            modelDimension = null;
+ctx.onmessage = (event: MessageEvent<IncomingMsg>) => {
+    void (async () => {
+        const msg = event.data;
+        try {
+            if (msg.type === 'init') {
+                await handleInit(msg);
+            } else if (msg.type === 'embed') {
+                await handleEmbed(msg);
+            } else if (msg.type === 'dispose') {
+                extractor = null;
+                modelDimension = null;
+            }
+        } catch (err) {
+            const m = err instanceof Error ? err.message : String(err);
+            const stack = err instanceof Error ? err.stack : undefined;
+            if (msg.type === 'embed') {
+                ctx.postMessage({ type: 'result', id: msg.id, vectors: null, error: m });
+            } else {
+                ctx.postMessage({ type: 'init-error', message: m, stack });
+            }
         }
-    } catch (err) {
-        const m = err instanceof Error ? err.message : String(err);
-        const stack = err instanceof Error ? err.stack : undefined;
-        if (msg.type === 'embed') {
-            ctx.postMessage({ type: 'result', id: msg.id, vectors: null, error: m });
-        } else {
-            ctx.postMessage({ type: 'init-error', message: m, stack });
-        }
-    }
+    })();
 };
 
 async function handleInit(msg: InitMsg): Promise<void> {
@@ -109,7 +111,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
     // back to fetching ort-wasm-simd-threaded.wasm from cdn.jsdelivr.net at
     // runtime — Obsidian Community store users only get main.js, and the
     // GFW-bound Chinese audience can't rely on jsdelivr anyway.
-    const ortWasmBytes = (await import('@inline/ort-wasm')).default as Uint8Array;
+    const ortWasmBytes = (await import('@inline/ort-wasm')).default;
     // Re-wrap so the Blob spec sees a plain ArrayBuffer-backed Uint8Array
     // (TS lib types reject SharedArrayBuffer-backed views here).
     const ortWasmBlob = new Blob([new Uint8Array(ortWasmBytes)], { type: 'application/wasm' });
@@ -180,7 +182,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
         built = await buildPipeline('wasm');
         postLog(`[vault-curate worker] device=wasm ready`);
     }
-    extractor = built as unknown as Extractor;
+    extractor = built as Extractor;
 
     // Probe with a tiny input to discover dimension.
     const probe = await extractor('_', { pooling: 'mean', normalize: true });

@@ -86,7 +86,8 @@ export class Indexer {
 
     private extractDescription(file: TFile): string | null {
         const cache = this.plugin.app.metadataCache.getFileCache(file);
-        const desc = cache?.frontmatter?.description;
+        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const desc = fm?.description;
         return typeof desc === "string" && desc.length > 0 ? desc : null;
     }
 
@@ -107,8 +108,11 @@ export class Indexer {
         const hasOutgoing = (cache?.links?.length ?? 0) > 0 || (cache?.embeds?.length ?? 0) > 0;
         const hasIncoming = incomingSet.has(file.path);
 
-        const created = cache?.frontmatter?.created;
-        const createdTs = created ? new Date(created).getTime() : file.stat.ctime;
+        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const created = fm?.created;
+        const createdTs = (typeof created === "string" || typeof created === "number")
+            ? new Date(created).getTime()
+            : file.stat.ctime;
         const hotMs = this.plugin.settings.hotDays * 24 * 60 * 60 * 1000;
         const isRecent = Date.now() - createdTs < hotMs;
 

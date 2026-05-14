@@ -143,8 +143,10 @@ function parseClusterNamingResponse(raw: string): { title: string; intro: string
             const parsed: unknown = JSON.parse(text);
             if (typeof parsed !== "object" || parsed === null) return null;
             const obj = parsed as { title?: unknown; intro?: unknown };
-            const title = stripDangerousInvisibles(String(obj.title ?? "")).trim();
-            const intro = stripDangerousInvisibles(String(obj.intro ?? ""), " ").trim();
+            const titleRaw = typeof obj.title === "string" ? obj.title : "";
+            const introRaw = typeof obj.intro === "string" ? obj.intro : "";
+            const title = stripDangerousInvisibles(titleRaw).trim();
+            const intro = stripDangerousInvisibles(introRaw, " ").trim();
             if (title.length < MIN_NAMING_TITLE_CHARS || title.length > MAX_NAMING_TITLE_CHARS) return null;
             if (intro.length < MIN_NAMING_INTRO_CHARS || intro.length > MAX_NAMING_INTRO_CHARS) return null;
             // Reject literal newlines + leading frontmatter / fence sequences
