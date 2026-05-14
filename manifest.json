@@ -1,7 +1,7 @@
 {
   "id": "vault-curate",
   "name": "Vault Curate",
-  "version": "1.0.0-rc.1",
+  "version": "1.0.0",
   "minAppVersion": "1.0.0",
   "description": "High-quality Chinese-friendly semantic search for Obsidian, with optional AI curation.",
   "author": "Jacob Mei",
