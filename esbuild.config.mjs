@@ -1,6 +1,6 @@
 import esbuild from 'esbuild';
 import path from 'path';
-import { existsSync, readFileSync, unlinkSync } from 'fs';
+import { copyFileSync, existsSync, readFileSync, unlinkSync } from 'fs';
 
 const prod = process.argv[2] === 'production';
 
@@ -13,12 +13,16 @@ const banner = `/*
 const PLUGIN_ROOT = path.resolve('.');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Self-contained bundling: ort WASM is inlined into worker.js (via binary
-// loader on the @inline/ort-wasm magic import), and worker.js is inlined into
-// main.js as a string (via text loader on the @inline/worker magic import).
-// Result: a single main.js ships everything, so Obsidian Community store
-// (which only fetches main.js + manifest + styles) gets a fully working plugin
-// without depending on cdn.jsdelivr.net at runtime.
+// Hybrid bundling:
+//   - worker.js is inlined into main.js as a string (via @inline/worker magic
+//     import) so Obsidian Community store users — who only get main.js +
+//     manifest + styles — still have the worker available at runtime.
+//   - ort-wasm-simd-threaded.wasm stays a sibling release asset. At runtime
+//     the worker points onnxruntime-web's wasmPaths at the GitHub releases
+//     asset URL instead of cdn.jsdelivr.net (the ORT default). GitHub is
+//     reachable for anyone who could install the plugin in the first place;
+//     jsdelivr is intermittently blocked in China — this avoids both that
+//     ban and a >5MB main.js (Obsidian Sync Standard limit).
 // ─────────────────────────────────────────────────────────────────────────────
 const ortWasmSrc = path.resolve(
   './node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm',
@@ -28,20 +32,10 @@ if (!existsSync(ortWasmSrc)) {
     `Missing onnxruntime-web WASM at ${ortWasmSrc}. Did npm install onnxruntime-web run?`,
   );
 }
-
-const inlineOrtWasmPlugin = {
-  name: 'inline-ort-wasm',
-  setup(build) {
-    build.onResolve({ filter: /^@inline\/ort-wasm$/ }, () => ({
-      path: ortWasmSrc,
-      namespace: 'inline-wasm',
-    }));
-    build.onLoad({ filter: /.*/, namespace: 'inline-wasm' }, () => ({
-      contents: readFileSync(ortWasmSrc),
-      loader: 'binary',
-    }));
-  },
-};
+// Copy WASM to plugin root so release.yml can attach it as a release asset.
+// (It's NOT auto-downloaded by Obsidian Community store, but the worker
+// fetches it from the release at runtime — see workers/embeddingWorker.ts.)
+copyFileSync(ortWasmSrc, path.join(PLUGIN_ROOT, 'ort-wasm-simd-threaded.wasm'));
 
 const WORKER_BUNDLE_PATH = path.join(PLUGIN_ROOT, 'worker.js');
 
@@ -153,7 +147,7 @@ await esbuild.build({
     'onnxruntime-web/webgpu':
       './node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs',
   },
-  plugins: [nativeStubPlugin, inlineOrtWasmPlugin],
+  plugins: [nativeStubPlugin],
   outfile: WORKER_BUNDLE_PATH,
   define: {
     'process.env.NODE_ENV': JSON.stringify(prod ? 'production' : 'development'),
@@ -185,14 +179,12 @@ const context = await esbuild.context({
 if (prod) {
   await context.rebuild();
   await context.dispose();
-  // Worker source + ort WASM are now inlined into main.js. The sibling files
-  // produced during the worker build (worker.js, plus any leftover sibling
-  // WASM from older builds) are no longer needed. Delete them so the release
-  // ships exactly 3 assets — main.js, manifest.json, styles.css.
-  for (const f of ['worker.js', 'ort-wasm-simd-threaded.wasm']) {
-    const p = path.join(PLUGIN_ROOT, f);
-    if (existsSync(p)) unlinkSync(p);
-  }
+  // Worker source is now inlined into main.js, so the sibling worker.js
+  // intermediate is no longer needed. ort-wasm-simd-threaded.wasm IS kept
+  // so release.yml can ship it as a release asset (the worker fetches it
+  // at runtime via wasmPaths).
+  const workerBundle = path.join(PLUGIN_ROOT, 'worker.js');
+  if (existsSync(workerBundle)) unlinkSync(workerBundle);
   process.exit(0);
 }
 

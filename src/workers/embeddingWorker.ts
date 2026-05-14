@@ -106,16 +106,14 @@ async function handleInit(msg: InitMsg): Promise<void> {
     }
 
     // ORT wasm tuning still applies to the wasm fallback path. WebGPU
-    // path ignores these. Also point ort at the inlined WASM binary (see
-    // esbuild.config.mjs / inlineOrtWasmPlugin) so the worker doesn't fall
-    // back to fetching ort-wasm-simd-threaded.wasm from cdn.jsdelivr.net at
-    // runtime — Obsidian Community store users only get main.js, and the
-    // GFW-bound Chinese audience can't rely on jsdelivr anyway.
-    const ortWasmBytes = (await import('@inline/ort-wasm')).default;
-    // Re-wrap so the Blob spec sees a plain ArrayBuffer-backed Uint8Array
-    // (TS lib types reject SharedArrayBuffer-backed views here).
-    const ortWasmBlob = new Blob([new Uint8Array(ortWasmBytes)], { type: 'application/wasm' });
-    const ortWasmUrl = URL.createObjectURL(ortWasmBlob);
+    // path ignores these. Also point ort at our own GitHub release asset
+    // instead of onnxruntime-web's jsdelivr CDN default — GitHub releases
+    // are reachable for anyone who managed to install the plugin in the
+    // first place; cdn.jsdelivr.net is intermittently blocked in China.
+    // Using /latest/download/ keeps the URL stable across plugin versions
+    // (a user always gets the WASM matching the latest published release).
+    const ortWasmUrl =
+        'https://github.com/notoriouslab/vault-curate/releases/latest/download/ort-wasm-simd-threaded.wasm';
     const ortWasm = (tfm.env as unknown as {
         backends?: {
             onnx?: {

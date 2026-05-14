@@ -1,10 +1,6 @@
-// Build-time virtual modules supplied by esbuild plugins
-// (inlineOrtWasmPlugin / inlineWorkerSourcePlugin in esbuild.config.mjs).
-
-declare module '@inline/ort-wasm' {
-    const bytes: Uint8Array;
-    export default bytes;
-}
+// Build-time virtual module supplied by inlineWorkerSourcePlugin in
+// esbuild.config.mjs. Worker source is inlined into main.js as a string and
+// instantiated via Blob URL at runtime.
 
 declare module '@inline/worker' {
     const source: string;
