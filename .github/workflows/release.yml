@@ -1,0 +1,57 @@
+name: release
+
+on:
+  # Auto-trigger on new release publication.
+  release:
+    types: [published]
+  # Manual trigger to attest a tag that was published before this workflow existed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to rebuild + attest'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  id-token: write
+  attestations: write
+  contents: write
+
+jobs:
+  build-attest-upload:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve tag
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.resolve.outputs.tag }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Upload assets to release (overwrite)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.resolve.outputs.tag }}" \
+            main.js manifest.json styles.css --clobber
