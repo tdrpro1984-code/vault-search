@@ -474,13 +474,12 @@ export default class VaultSearchPlugin extends Plugin {
                 return new Uint8Array(buf);
             },
             write: async (path, bytes) => {
-                // Strip view metadata to get a plain ArrayBuffer for writeBinary.
-                // (TS lib types ArrayBufferLike as ArrayBuffer | SharedArrayBuffer,
-                // but Obsidian's signature wants ArrayBuffer specifically.)
-                const ab = bytes.buffer.slice(
-                    bytes.byteOffset,
-                    bytes.byteOffset + bytes.byteLength,
-                ) as ArrayBuffer;
+                // Copy into a fresh ArrayBuffer so writeBinary's strict
+                // ArrayBuffer signature is satisfied without an `as` cast
+                // (Uint8Array.buffer is ArrayBufferLike — ArrayBuffer |
+                // SharedArrayBuffer — in current TS lib types).
+                const ab = new ArrayBuffer(bytes.byteLength);
+                new Uint8Array(ab).set(bytes);
                 await this.app.vault.adapter.writeBinary(path, ab);
             },
             exists: (path) => this.app.vault.adapter.exists(path),
@@ -576,7 +575,7 @@ export default class VaultSearchPlugin extends Plugin {
         oldProvider?.dispose();
     }
     async loadSettings() {
-        const raw = await this.loadData();
+        const raw: unknown = await this.loadData();
         // data.json should always parse to an object. If a user (or a tool
         // crash) left it in a non-object shape, back the broken file up so
         // they can inspect it instead of silently overwriting on the next

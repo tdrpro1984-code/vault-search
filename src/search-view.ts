@@ -669,7 +669,8 @@ export class SearchView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(result.path);
         if (!(file instanceof TFile)) return;
         const cache = this.app.metadataCache.getFileCache(file);
-        const desc = cache?.frontmatter?.description;
+        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const desc = fm?.description;
         if (typeof desc === "string" && desc.trim().length > 0) return;
 
         const btn = item.createEl("button", {
