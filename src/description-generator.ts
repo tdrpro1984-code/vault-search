@@ -29,25 +29,38 @@ const TAG_LENGTH_CAP = 64;
  * source file stays plain ASCII (Edit/Write tools decode raw \uXXXX in
  * regex literals, which corrupted earlier versions).
  */
-export const STRIP_CONTROL_CHARS = new RegExp(
-    "[" + "\\x00-\\x08" + "\\x0b\\x0c" + "\\x0e-\\x1f"
-        + "\\x7f-\\x9f"
-        + "\\u034f"          // combining grapheme joiner (CGJ)
-        + "\\u180b-\\u180d"  // mongolian free variation selectors
-        + "\\u200b-\\u200f"  // zero-width space, ZWNJ, ZWJ, LRM, RLM
-        + "\\u2028\\u2029"   // line/paragraph separator
-        + "\\u202a-\\u202e"  // LRE/RLE/PDF/LRO/RLO (bidi overrides — visual injection)
-        + "\\u2060-\\u206f"  // word joiner + bidi isolate controls + math invisibles
-        + "\\ufe00-\\ufe0f"  // variation selectors VS1-VS16
-        + "\\ufeff"          // BOM / zero-width no-break space
-        + "\\ufff9-\\ufffb"  // interlinear annotation anchor/separator/terminator
-        + "]",
-    "gu",  // `u` flag silences ESLint no-misleading-character-class warning
+// Cc + Cf cover all ASCII control codes, C1 controls, zero-width chars,
+// bidi controls (incl. RLO), BOM, word joiner, bidi isolates, interlinear
+// annotation, and the Plane-14 tag block. Using \p{...} keeps the character
+// class clean of combining marks so the no-misleading-character-class rule
+// stays happy.
+export const STRIP_CONTROL_CHARS = /[\p{Cc}\p{Cf}]/gu;
+
+// Combining marks (Mn category) used for invisible spoofing — listed via
+// alternation rather than a character class so the lint rule doesn't trip on
+// combining marks grouped together. Built via RegExp + escape strings so
+// the source file stays plain ASCII (Edit/Write tools decode raw \uXXXX in
+// regex literals, which corrupted earlier versions).
+export const STRIP_COMBINING_INVISIBLES = new RegExp(
+    "\\u034f"                                                                       // CGJ
+    + "|\\u180b|\\u180c|\\u180d"                                                    // Mongolian FVS
+    + "|\\ufe00|\\ufe01|\\ufe02|\\ufe03|\\ufe04|\\ufe05|\\ufe06|\\ufe07"             // VS1-VS8
+    + "|\\ufe08|\\ufe09|\\ufe0a|\\ufe0b|\\ufe0c|\\ufe0d|\\ufe0e|\\ufe0f",            // VS9-VS16
+    "gu",
 );
-// Plane 14 Unicode Tag block U+E0000-U+E007F (each codepoint encodes as a
-// surrogate pair in JS strings). The `u` flag puts the regex in code-point
-// mode so the range is matched as a single codepoint rather than two halves.
-export const STRIP_UNICODE_TAGS = /[\u{E0000}-\u{E007F}]/gu;
+
+// Plane 14 Unicode Tag block (U+E0000-U+E007F). RegExp constructor with \u{}
+// escapes; `u` flag puts the regex in code-point mode so the range matches
+// as a single codepoint rather than two surrogate halves.
+export const STRIP_UNICODE_TAGS = new RegExp("[\\u{E0000}-\\u{E007F}]", "gu");
+
+/** Strip dangerous invisible code points (control, format, combining marks, tags). */
+export function stripDangerousInvisibles(text: string, replacement = ""): string {
+    return text
+        .replace(STRIP_CONTROL_CHARS, replacement)
+        .replace(STRIP_COMBINING_INVISIBLES, "")
+        .replace(STRIP_UNICODE_TAGS, "");
+}
 
 /** Slice text safely without splitting a UTF-16 surrogate pair. */
 function safeSlice(text: string, max: number): string {
@@ -234,7 +247,7 @@ export class DescriptionGenerator {
         // Defang YAML-breaking characters before we ever consider writing this
         // into frontmatter (processFrontMatter quotes most things, but explicit
         // sanitisation here keeps the round-trip predictable).
-        raw = raw.replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, "").replace(/---/g, "—");
+        raw = stripDangerousInvisibles(raw, " ").replace(/---/g, "—");
         return raw.trim();
     }
 
@@ -275,11 +288,11 @@ export class DescriptionGenerator {
                 // further use — a poisoned LLM response could otherwise smuggle
                 // ANSI escapes, YAML-confusing line breaks, or invisible chars
                 // into frontmatter.
-                const desc = safeSlice(descRaw.replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, ""), DESCRIPTION_LENGTH_CAP);
+                const desc = safeSlice(stripDangerousInvisibles(descRaw, " "), DESCRIPTION_LENGTH_CAP);
                 const tags = Array.isArray(obj.tags)
                     ? obj.tags
                         .map((s) => String(s))
-                        .map((s) => s.replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").replace(/\s+/g, "_"))
+                        .map((s) => stripDangerousInvisibles(s).replace(/\s+/g, "_"))
                         .map((s) => safeSlice(s, TAG_LENGTH_CAP))
                         .filter((s) => s !== "..." && s !== "…" && s.length > 0)
                     : undefined;

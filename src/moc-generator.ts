@@ -11,7 +11,7 @@ import type {
 } from "./types";
 import { clusterEmbeddings, shouldFallbackToFlat } from "./clustering";
 import { formatLocalDateTime, requestLlmJson, toWikilink } from "./utils";
-import { STRIP_CONTROL_CHARS, STRIP_UNICODE_TAGS } from "./description-generator";
+import { stripDangerousInvisibles } from "./description-generator";
 import { t } from "./i18n";
 
 const LLM_NAMING_TIMEOUT_MS = 30000;
@@ -143,8 +143,8 @@ function parseClusterNamingResponse(raw: string): { title: string; intro: string
             const parsed: unknown = JSON.parse(text);
             if (typeof parsed !== "object" || parsed === null) return null;
             const obj = parsed as { title?: unknown; intro?: unknown };
-            const title = String(obj.title ?? "").replace(STRIP_CONTROL_CHARS, "").replace(STRIP_UNICODE_TAGS, "").trim();
-            const intro = String(obj.intro ?? "").replace(STRIP_CONTROL_CHARS, " ").replace(STRIP_UNICODE_TAGS, "").trim();
+            const title = stripDangerousInvisibles(String(obj.title ?? "")).trim();
+            const intro = stripDangerousInvisibles(String(obj.intro ?? ""), " ").trim();
             if (title.length < MIN_NAMING_TITLE_CHARS || title.length > MAX_NAMING_TITLE_CHARS) return null;
             if (intro.length < MIN_NAMING_INTRO_CHARS || intro.length > MAX_NAMING_INTRO_CHARS) return null;
             // Reject literal newlines + leading frontmatter / fence sequences
