@@ -105,7 +105,15 @@ export class OnboardingModal extends Modal {
 
     private handleIndexClick() {
         // Validate provider preconditions before kicking off a rebuild.
-        if (this.chosenAICuration === "yes" && this.chosenProvider === "wasm") {
+        // AI curation needs an LLM endpoint, NOT a specific embedding provider.
+        // wasm + AI yes is valid when Ollama is reachable (LLM defaults to
+        // settings.ollamaUrl). openai-compatible embedding doubles as LLM
+        // endpoint, so it always satisfies the LLM requirement.
+        if (
+            this.chosenAICuration === "yes" &&
+            this.chosenProvider === "wasm" &&
+            !this.ollamaReachable
+        ) {
             new Notice(t.onboardingAIRequiresLlm, 8000);
             return;
         }

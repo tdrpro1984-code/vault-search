@@ -45,6 +45,62 @@ export async function checkOllama(url: string): Promise<boolean> {
     }
 }
 
+export interface LLMReachability {
+    reachable: boolean;
+    endpoint: string;
+    protocol: ApiFormat;
+    reason?: string;
+}
+
+/**
+ * Probe the configured LLM endpoint (Ollama or OpenAI-compatible) used by
+ * AI curation. Surfaces the same shape regardless of protocol so callers
+ * can render a uniform status line. Used by the Settings UI to answer the
+ * "I enabled AI curation but nothing happens" support pattern in-place,
+ * instead of forcing users to trigger description generation just to
+ * discover the endpoint is down.
+ */
+export async function checkLLMReachable(
+    cfg: { ollamaUrl: string; apiFormat: ApiFormat; apiKey: string },
+): Promise<LLMReachability> {
+    const endpoint = (cfg.ollamaUrl || "").replace(/\/$/, "");
+    const protocol = cfg.apiFormat;
+    const result: LLMReachability = { reachable: false, endpoint, protocol };
+    if (!endpoint) {
+        result.reason = "no endpoint configured";
+        return result;
+    }
+    try {
+        validateServerUrl(endpoint);
+    } catch (err) {
+        result.reason = err instanceof Error ? err.message : String(err);
+        return result;
+    }
+    const probeUrl = protocol === "ollama"
+        ? `${endpoint}/api/tags`
+        : (endpoint.endsWith("/v1") ? `${endpoint}/models` : `${endpoint}/v1/models`);
+    try {
+        const resp = await withTimeout(
+            requestUrl({
+                url: probeUrl,
+                method: "GET",
+                headers: cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {},
+                throw: false,
+            }),
+            3000,
+            "LLM reachability probe",
+        );
+        if (resp.status >= 200 && resp.status < 300) {
+            result.reachable = true;
+        } else {
+            result.reason = `HTTP ${resp.status}`;
+        }
+    } catch (err) {
+        result.reason = err instanceof Error ? err.message : "connection error";
+    }
+    return result;
+}
+
 export function cosineSimilarity(a: number[], b: number[]): number {
     const len = Math.min(a.length, b.length);
     if (len === 0) return 0;

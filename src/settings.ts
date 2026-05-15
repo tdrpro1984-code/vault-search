@@ -7,7 +7,7 @@
 import { App, Modal, PluginSettingTab, Setting } from "obsidian";
 import type VaultSearchPlugin from "./main";
 import type { EmbeddingProviderType } from "./types";
-import { fetchOllamaModels, formatLocalDateTime, isLoopbackHost } from "./utils";
+import { checkLLMReachable, fetchOllamaModels, formatLocalDateTime, isLoopbackHost } from "./utils";
 import { t } from "./i18n";
 
 export class VaultSearchSettingTab extends PluginSettingTab {
@@ -222,6 +222,48 @@ export class VaultSearchSettingTab extends PluginSettingTab {
             this.plugin.settings.llmModel = val;
             await this.plugin.saveSettings();
         }, "llm");
+
+        // Endpoint reachability summary. Surfaces the actual URL the LLM
+        // will hit and a live probe — resolves the "I flipped the toggle
+        // but description generation does nothing" support pattern in the
+        // Settings UI itself, instead of forcing users to run a command
+        // just to discover their endpoint is down.
+        const endpointSetting = new Setting(parent).setName(t.llmEndpointHeading);
+        const desc = endpointSetting.descEl;
+        desc.empty();
+        const urlLine = desc.createDiv({ cls: "vault-curate-endpoint-url" });
+        const statusLine = desc.createDiv({ cls: "vault-curate-endpoint-status" });
+        const hintLine = desc.createDiv({ cls: "vault-curate-endpoint-hint" });
+        endpointSetting.addButton(btn => {
+            btn.setButtonText(t.llmEndpointRecheck);
+            btn.onClick(() => {
+                void this.renderLLMStatus(urlLine, statusLine, hintLine);
+            });
+        });
+        void this.renderLLMStatus(urlLine, statusLine, hintLine);
+    }
+
+    private async renderLLMStatus(
+        urlLine: HTMLElement,
+        statusLine: HTMLElement,
+        hintLine: HTMLElement,
+    ) {
+        const settings = this.plugin.settings;
+        const protocolLabel = settings.apiFormat === "ollama" ? "Ollama" : "OpenAI-compatible";
+        urlLine.setText(`${protocolLabel} @ ${settings.ollamaUrl}`);
+        statusLine.setText(t.llmEndpointProbing);
+        hintLine.empty();
+        const status = await checkLLMReachable({
+            ollamaUrl: settings.ollamaUrl,
+            apiFormat: settings.apiFormat,
+            apiKey: settings.apiKey,
+        });
+        if (status.reachable) {
+            statusLine.setText(t.llmEndpointReachable);
+        } else {
+            statusLine.setText(t.llmEndpointUnreachable(status.reason ?? "unknown"));
+            hintLine.setText(t.llmEndpointHint);
+        }
     }
 
     // ── Section 3: Advanced (collapsed) ────────────────────────

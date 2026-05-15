@@ -34,6 +34,12 @@ export interface Locale {
     llmModelDesc: string;
     enableAICuration: string;
     enableAICurationDesc: string;
+    llmEndpointHeading: string;
+    llmEndpointProbing: string;
+    llmEndpointReachable: string;
+    llmEndpointUnreachable: (reason: string) => string;
+    llmEndpointHint: string;
+    llmEndpointRecheck: string;
     actions: string;
     rebuildIndex: string;
     rebuildIndexDesc: string;
@@ -213,9 +219,15 @@ const en: Locale = {
     synonymsLabel: "Synonyms",
     synonymsDesc: "One per line: keyword = synonym1, synonym2",
     llmModel: "LLM model",
-    llmModelDesc: "Ollama model for AI curation (description / MOC naming). Recommended: qwen3:1.7b.",
+    llmModelDesc: "Model used by AI curation (description / MOC naming). Recommended: qwen3:1.7b for Ollama; gpt-4o-mini for OpenAI-compatible.",
     enableAICuration: "Enable AI curation",
-    enableAICurationDesc: "When on, expose Description generation and topic-grouped MOC commands. Requires an LLM provider.",
+    enableAICurationDesc: "When on, expose Description generation and topic-grouped MOC commands. The LLM reuses the endpoint set above for the embedding provider (Ollama or OpenAI-compatible).",
+    llmEndpointHeading: "LLM endpoint status",
+    llmEndpointProbing: "Probing…",
+    llmEndpointReachable: "✓ Reachable",
+    llmEndpointUnreachable: (reason: string) => `⚠ Unreachable: ${reason}`,
+    llmEndpointHint: "Start Ollama (ollama.com), or switch the embedding provider above to OpenAI-compatible.",
+    llmEndpointRecheck: "Recheck",
     actions: "Actions",
     rebuildIndex: "Rebuild index",
     rebuildIndexDesc: "Re-embed all notes from scratch. Required after adding many new files or changing embedding model.",
@@ -311,7 +323,7 @@ const en: Locale = {
     onboardingAIHeading: "Enable AI curation?",
     onboardingAIYes: "Yes — description + topic-grouped MOC",
     onboardingAINo: "No, just search",
-    onboardingAIRequiresLlm: "AI curation needs an Ollama or OpenAI-compatible LLM endpoint.",
+    onboardingAIRequiresLlm: "AI curation needs an LLM endpoint. Start Ollama (ollama.com) or switch embedding to OpenAI-compatible.",
     onboardingIndexNow: "Index my vault now",
     onboardingLater: "Skip for now",
     backendNotReady: "Backend not ready — reload the plugin (check console for the init error).",
@@ -419,9 +431,15 @@ const zhTW: Locale = {
     synonymsLabel: "同義詞",
     synonymsDesc: "每行一組：關鍵字 = 同義詞1, 同義詞2",
     llmModel: "LLM 模型",
-    llmModelDesc: "AI 整理（description / MOC 群組命名）使用的 Ollama 模型。推薦：qwen3:1.7b。",
+    llmModelDesc: "AI 整理（description / MOC 群組命名）使用的 LLM 模型。Ollama 推薦：qwen3:1.7b；OpenAI-compatible 可用 gpt-4o-mini 等。",
     enableAICuration: "啟用 AI 整理",
-    enableAICurationDesc: "開啟後才會出現 Description 生成與主題分群 MOC 等指令。需要設定 LLM 提供者。",
+    enableAICurationDesc: "開啟後才會出現 Description 生成與主題分群 MOC 等指令。LLM 沿用上方 Embedding 提供者的 endpoint（Ollama 或 OpenAI-compatible）。",
+    llmEndpointHeading: "LLM 連線狀態",
+    llmEndpointProbing: "檢測中…",
+    llmEndpointReachable: "✓ 可連線",
+    llmEndpointUnreachable: (reason: string) => `⚠ 無法連線：${reason}`,
+    llmEndpointHint: "請啟動 Ollama（ollama.com），或將上方「Embedding 提供者」切換為 OpenAI-compatible。",
+    llmEndpointRecheck: "重新檢測",
     actions: "操作",
     rebuildIndex: "重建索引",
     rebuildIndexDesc: "全部重新 embed。大量新增檔案或更換 embedding 模型後需要執行。",
@@ -517,7 +535,7 @@ const zhTW: Locale = {
     onboardingAIHeading: "啟用 AI 整理？",
     onboardingAIYes: "啟用 — Description 生成與主題分群 MOC",
     onboardingAINo: "不用，純搜尋",
-    onboardingAIRequiresLlm: "AI 整理需要 Ollama 或 OpenAI-compatible LLM endpoint。",
+    onboardingAIRequiresLlm: "AI 整理需要 LLM endpoint。請先啟動 Ollama（ollama.com）或把 embedding 切換為 OpenAI-compatible。",
     onboardingIndexNow: "現在開始建立索引",
     onboardingLater: "稍後再說",
     backendNotReady: "後端未就緒 — 請重新載入 plugin（檢查 console 看初始化錯誤）。",
