@@ -11,6 +11,8 @@
 
 **High-quality Chinese-friendly semantic search for Obsidian, with optional AI curation.**
 
+Traditional Chinese · Simplified Chinese · CJK · local-first · hybrid retrieval (BM25 + embeddings + fuzzy) · WebGPU on-device · no API keys
+
 [繁體中文](./README.zh-TW.md)
 
 ![Vault Curate](./docs/intro.jpg)

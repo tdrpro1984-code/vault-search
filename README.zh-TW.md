@@ -11,6 +11,8 @@
 
 **為 Obsidian 打造的高品質中文語意搜尋與 AI 整理工具。**
 
+繁體中文 · 簡體中文 · 本地推論 · 三路融合搜尋（BM25 + 向量 + 模糊）· WebGPU 加速 · 不上傳資料
+
 [English](./README.md)
 
 ![Vault Curate](./docs/intro.jpg)
