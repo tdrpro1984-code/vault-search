@@ -80,6 +80,15 @@ export default class VaultSearchPlugin extends Plugin {
         // Register sidebar view
         this.registerView(VIEW_TYPE_SEARCH, (leaf) => new SearchView(leaf, this));
 
+        // Register as a hover-link source so Search/Discover result items
+        // can integrate with Obsidian's native Page Preview core plugin.
+        // defaultMod=true means user holds Cmd/Ctrl while hovering — matches
+        // the convention used by Obsidian's own [[wikilink]] previews.
+        this.registerHoverLinkSource("vault-curate", {
+            defaultMod: true,
+            display: "Vault Curate",
+        });
+
         // Ribbon icon to open sidebar
         this.addRibbonIcon("compass", t.viewDisplayName, () => {
             void this.activateView();
@@ -237,10 +246,16 @@ export default class VaultSearchPlugin extends Plugin {
                 this.app.vault.on("create", (file) => this.onFileChange(file, "create"))
             );
             this.registerEvent(
-                this.app.vault.on("delete", (file) => this.onFileChange(file, "delete"))
+                this.app.vault.on("delete", (file) => {
+                    if (file instanceof TFile) this.notifyPinOnFileDelete(file.path);
+                    this.onFileChange(file, "delete");
+                })
             );
             this.registerEvent(
-                this.app.vault.on("rename", (file, oldPath) => this.onFileRename(file, oldPath))
+                this.app.vault.on("rename", (file, oldPath) => {
+                    if (file instanceof TFile) this.notifyPinOnFileRename(file);
+                    this.onFileRename(file, oldPath);
+                })
             );
         });
 
@@ -311,11 +326,39 @@ export default class VaultSearchPlugin extends Plugin {
     private activeDiscoverTimer: number | null = null;
     private lastDiscoverPath: string | null = null;
 
+    /** Notify every SearchView leaf that a file was deleted so it can
+     *  auto-unpin if that file was its pinnedFile (D3 edge case b). */
+    private notifyPinOnFileDelete(path: string) {
+        for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)) {
+            if (leaf.view instanceof SearchView) {
+                leaf.view.handleFileDeleted(path);
+            }
+        }
+    }
+
+    /** Notify every SearchView leaf that a file was renamed so it can
+     *  re-render the pin status line with the new basename (D3 edge case a).
+     *  Obsidian has already updated TFile.path on the same instance. */
+    private notifyPinOnFileRename(file: TFile) {
+        for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)) {
+            if (leaf.view instanceof SearchView) {
+                leaf.view.handleFileRenamed(file);
+            }
+        }
+    }
+
     private onActiveFileChange(file: TFile) {
         if (file.extension !== "md") return;
         if (file.path === this.lastDiscoverPath) return;
         if (this.activeDiscoverTimer) window.clearTimeout(this.activeDiscoverTimer);
         this.activeDiscoverTimer = window.setTimeout(() => {
+            // Skip refresh if any SearchView leaf has Discover pinned (D3 A2:
+            // global guard — any pinned leaf blocks file-open refresh). Do NOT
+            // update lastDiscoverPath here so subsequent unpin re-evaluates.
+            const anyPinned = this.app.workspace.getLeavesOfType(VIEW_TYPE_SEARCH)
+                .some(leaf => leaf.view instanceof SearchView && leaf.view.isPinned());
+            if (anyPinned) return;
+
             this.lastDiscoverPath = file.path;
             // Skip silently when the sidebar leaf isn't mounted yet or its
             // view is still deferred — Active Discovery only makes sense

@@ -155,6 +155,11 @@ export interface Locale {
     discoverGlobalNoHot: string;
     discoverGlobalNoCold: string;
     discoverGlobalAllFiltered: string;
+    discoverPin: string;
+    discoverUnpin: string;
+    discoverPinnedTo: (title: string) => string;
+    discoverPinNoFile: string;
+    discoverPinFileGone: string;
     noticeIndexCorrupt: string;
     indexingInProgress: string;
     viewDisplayName: string;
@@ -347,6 +352,11 @@ const en: Locale = {
     discoverGlobalNoHot: "No Hot notes yet — add internal links or recent notes to populate Hot, then Discover can surface related Cold notes against them.",
     discoverGlobalNoCold: "No Cold notes — every note in your vault is either linked or recent, so there's nothing to rediscover.",
     discoverGlobalAllFiltered: "All Cold candidates scored below the minimum threshold — lower 'Min score' in Settings → Advanced to surface lower-confidence matches.",
+    discoverPin: "Pin",
+    discoverUnpin: "Unpin",
+    discoverPinnedTo: (title) => `Pinned to: ${title}`,
+    discoverPinNoFile: "Open a note first, then pin Discover.",
+    discoverPinFileGone: "Pinned note was deleted — Discover unpinned.",
     noticeIndexCorrupt: "Vault Curate: Index file is corrupted. Please rebuild index.",
     indexingInProgress: "Vault Curate: Indexing already in progress",
     viewDisplayName: "Vault Curate",
@@ -559,6 +569,11 @@ const zhTW: Locale = {
     discoverGlobalNoHot: "目前沒有 Hot 筆記 — 加入 internal link 或近期建立筆記後 Hot 池子會浮現，才能用發掘找相關的 Cold 筆記。",
     discoverGlobalNoCold: "目前沒有 Cold 筆記 — vault 中所有筆記都有連結或近期建立，沒有可重新發現的內容。",
     discoverGlobalAllFiltered: "所有 Cold 候選筆記分數低於最低門檻 — 請至「設定 → 進階 → 最低分數」調低後重試。",
+    discoverPin: "釘選",
+    discoverUnpin: "解除釘選",
+    discoverPinnedTo: (title) => `已釘選：${title}`,
+    discoverPinNoFile: "請先打開筆記，再釘選 Discover。",
+    discoverPinFileGone: "已釘選筆記被刪除 — Discover 解除釘選。",
     noticeIndexCorrupt: "Vault Curate：索引檔案已損壞，請重建索引。",
     indexingInProgress: "Vault Curate：正在索引中，請稍候",
     viewDisplayName: "語意搜尋",

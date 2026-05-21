@@ -520,7 +520,12 @@ export class VaultSearchSettingTab extends PluginSettingTab {
      * to fetch — bail early.
      */
     private async loadModelOptions() {
-        if (this.plugin.settings.embeddingProvider === "wasm") return;
+        // Fetch when either dropdown needs it: embedding dropdown (non-wasm provider)
+        // OR LLM dropdown (AI curation enabled). Bailing on wasm alone broke the
+        // "wasm embedding + Ollama LLM" combo — users had no UI path to switch models.
+        const needsEmbeddingFetch = this.plugin.settings.embeddingProvider !== "wasm";
+        const needsLLMFetch = this.plugin.settings.enableAICuration;
+        if (!needsEmbeddingFetch && !needsLLMFetch) return;
         const models = await fetchOllamaModels(this.plugin.settings.ollamaUrl, this.plugin.settings.apiFormat);
         if (models.length === 0) return;
 

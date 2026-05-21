@@ -48,6 +48,11 @@ export class SearchView extends ItemView {
     private mocBtn!: HTMLButtonElement;
     private globalCancelled = { value: false };
     private lastDiscoverResults: SearchResult[] = [];
+    // Pin state — session-only (plugin reload resets). Locks Discover sidebar
+    // to a specific note so file-open events don't refresh away the context.
+    private pinnedFile: TFile | null = null;
+    private pinBtn!: HTMLButtonElement;
+    private pinStatusEl!: HTMLDivElement;
     /** Path the latest discover-for-file invocation is computing for.
      *  Used to discard stale renders when the user switches files faster
      *  than the cosine sweep completes. */
@@ -223,9 +228,19 @@ export class SearchView extends ItemView {
             text: t.generateMoc,
             cls: "vault-curate-mode-btn vault-curate-moc-btn",
         });
+        // Pin toggle — rightmost in mode bar, adjacent to mocBtn.
+        this.pinBtn = modeBar.createEl("button", {
+            text: "\u{1F4CC}",  // 📌
+            cls: "vault-curate-mode-btn vault-curate-pin-btn",
+            attr: { "aria-label": t.discoverPin, title: t.discoverPin },
+        });
         this.modeEls.current.addEventListener("click", () => this.setDiscoverMode("current"));
         this.modeEls.global.addEventListener("click", () => this.setDiscoverMode("global"));
         this.mocBtn.addEventListener("click", () => void this.generateMoc());
+        this.pinBtn.addEventListener("click", () => this.togglePin());
+
+        // Pin status line — hidden until a file is pinned.
+        this.pinStatusEl = container.createDiv({ cls: "vault-curate-pin-status vault-curate-hidden" });
 
         this.discoverStatusEl = container.createDiv({ cls: "vault-curate-status" });
         this.discoverResultsEl = container.createDiv({ cls: "vault-curate-results" });
@@ -233,8 +248,69 @@ export class SearchView extends ItemView {
         this.setDiscoverMode("current");
     }
 
+    // ── Pin Discover ───────────────────────────────────
+
+    /** Public — main.ts onActiveFileChange checks this before refreshing. */
+    isPinned(): boolean {
+        return this.pinnedFile !== null;
+    }
+
+    /** Public — main.ts vault.on('rename') re-renders status to pick up new basename.
+     *  Obsidian auto-updates TFile.path on rename, so we identify by reference. */
+    handleFileRenamed(file: TFile) {
+        if (this.pinnedFile === file) {
+            this.renderPinStatus();
+        }
+    }
+
+    /** Public — main.ts vault.on('delete') auto-unpins + shows Notice. */
+    handleFileDeleted(path: string) {
+        if (this.pinnedFile?.path === path) {
+            this.unpin();
+            new Notice(t.discoverPinFileGone);
+        }
+    }
+
+    private togglePin() {
+        if (this.pinnedFile !== null) {
+            this.unpin();
+            return;
+        }
+        const active = this.app.workspace.getActiveFile();
+        if (!active) {
+            new Notice(t.discoverPinNoFile);
+            return;
+        }
+        this.pinnedFile = active;
+        this.renderPinStatus();
+        this.pinBtn.addClass("is-active");
+        this.pinBtn.setAttribute("aria-label", t.discoverUnpin);
+        this.pinBtn.setAttribute("title", t.discoverUnpin);
+    }
+
+    private unpin() {
+        this.pinnedFile = null;
+        this.pinStatusEl.toggleClass("vault-curate-hidden", true);
+        this.pinBtn.removeClass("is-active");
+        this.pinBtn.setAttribute("aria-label", t.discoverPin);
+        this.pinBtn.setAttribute("title", t.discoverPin);
+    }
+
+    private renderPinStatus() {
+        if (!this.pinnedFile) {
+            this.pinStatusEl.toggleClass("vault-curate-hidden", true);
+            return;
+        }
+        this.pinStatusEl.setText(t.discoverPinnedTo(this.pinnedFile.basename));
+        this.pinStatusEl.toggleClass("vault-curate-hidden", false);
+    }
+
     private setDiscoverMode(mode: DiscoverMode) {
         this.globalCancelled.value = true; // Cancel any running global computation
+        // User switching to global = implicit unpin (pin is a current-mode concept).
+        if (mode === "global" && this.pinnedFile !== null) {
+            this.unpin();
+        }
         this.discoverMode = mode;
         this.modeEls.current.toggleClass("is-active", mode === "current");
         this.modeEls.global.toggleClass("is-active", mode === "global");
@@ -634,6 +710,19 @@ export class SearchView extends ItemView {
             if (file instanceof TFile) {
                 void this.app.workspace.getLeaf(false).openFile(file);
             }
+        });
+
+        // Hover → trigger Obsidian native Page Preview (gated by Cmd/Ctrl
+        // modifier per registerHoverLinkSource defaultMod:true in main.ts).
+        item.addEventListener("mouseover", (event) => {
+            this.app.workspace.trigger("hover-link", {
+                event,
+                source: "vault-curate",
+                hoverParent: this,
+                targetEl: item,
+                linktext: result.path,
+                sourcePath: result.path,
+            });
         });
 
         // Right-click → native file context menu (Bookmark, Open in new tab, etc.)

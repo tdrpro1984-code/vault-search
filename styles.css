@@ -302,6 +302,25 @@
     font-size: 0.8em;
 }
 
+.vault-curate-pin-btn {
+    font-size: 0.85em;
+    padding: 4px 8px;
+}
+
+.vault-curate-pin-btn.is-active {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+}
+
+.vault-curate-pin-status {
+    padding: 4px 12px;
+    font-size: 0.75em;
+    color: var(--text-muted);
+    background: var(--background-secondary);
+    border-radius: 6px;
+    margin-top: 4px;
+}
+
 /* Settings stats */
 .vault-curate-stats {
     font-size: 0.8em;
