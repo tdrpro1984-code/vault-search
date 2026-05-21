@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.3 — 2026-05-21
+
+Audit compliance patch — addresses three findings raised by the Obsidian Developer Dashboard auto-audit.
+
+### Changed
+- **Build**: esbuild now strips `require("node:fs")` and `require("node:crypto")` references from the bundled `sql.js` Emscripten output. Those branches are dead code in Obsidian's renderer process; removing the syntactic references resolves the Dashboard's "Direct Filesystem Access" warning without changing runtime behaviour.
+
+### Docs
+- README + README.zh-TW: added an "Audit disclosures" section explaining the remaining audit findings — vault enumeration (necessary for indexing; user-scopable via `excludePatterns`), and `new Function` inside the bundled `@huggingface/transformers` (model-loading internals only; Vault Curate's own source contains zero `eval` / `new Function`).
+
 ## 1.0.2 — 2026-05-21
 
 UX patch from community feedback (forum-zh thread #61655) + own dogfood.

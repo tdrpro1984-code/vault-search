@@ -205,6 +205,14 @@ AI 整理（description / MOC 命名）所用的 LLM endpoint 另外設定，相
 
 **不蒐集任何使用紀錄，不主動向任何伺服器回傳資料。**
 
+### 審查說明
+
+Obsidian Developer Dashboard 自動審查可能對本 plugin 提出以下 finding，以下為刻意設計並在此公開說明：
+
+- **Vault 列舉**（`vault.getMarkdownFiles()`）：indexer 需遍歷整個 vault 的 markdown 檔案列表才能建立 semantic embedding 索引。可在「設定 → 進階」的 `excludePatterns` 範圍掃描——例如排除 `_templates/`、`.trash/` 或任何不想索引的資料夾。未在包含集合內的檔案不會被讀取。
+- **動態程式碼執行**（bundled `@huggingface/transformers` 的 `new Function`）：Hugging Face Transformers 內部於 model loading 過程用 `new Function` 建立 type-safe method dispatchers。Vault Curate 自身原始碼**零**個 `eval()` / `new Function()`。我們直接 bundle 上游 library 避免分叉；dynamic dispatch 只發生在 embedding model 的 tokenizer / inference 初始化，不會在 vault 內容上執行。
+- **直接檔案系統存取**：bundled `sql.js` 的 Emscripten 輸出含 Node.js fallback path 會 import `node:fs` / `node:crypto`。這些分支在 Obsidian renderer process 下是 dead code（由 `process.type !== "renderer"` 阻擋）。v1.0.3 起 esbuild 設定會把這些 `require()` 字串從 release bundle 完全移除，audit 不會再看見它們。
+
 ### 🔒 關於 API key 儲存
 
 Vault Curate 跟所有 Obsidian plugin 一樣，將設定（含 OpenAI API key）以明文存放於 `<vault>/.obsidian/plugins/vault-curate/data.json`。這是 Obsidian 的 plugin 儲存機制，並非 Vault Curate 獨有做法。

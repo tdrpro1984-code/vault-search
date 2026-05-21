@@ -110,6 +110,29 @@ const nativeStubPlugin = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Workaround 4: sql.js Emscripten output references `node:fs` (Node fallback
+// read path) and `node:crypto` (Node randomFillSync) in dead-code branches
+// gated by `process?.type !== "renderer"`. The branches never execute in
+// Obsidian's renderer process, but the syntactic `require("node:*")` strings
+// remain in the bundle and trigger the Dashboard's "Direct Filesystem Access"
+// warning (and would trigger a similar warning if the ruleset expanded to
+// other node: builtins). Aliasing both to an empty stub removes the strings.
+// ─────────────────────────────────────────────────────────────────────────────
+const stripNodeBuiltinsPlugin = {
+  name: 'strip-node-builtins',
+  setup(build) {
+    build.onResolve({ filter: /^node:(fs|crypto)$/ }, (args) => ({
+      path: args.path,
+      namespace: 'node-builtin-stub',
+    }));
+    build.onLoad({ filter: /.*/, namespace: 'node-builtin-stub' }, (args) => ({
+      contents: `// ${args.path} is unreachable in Obsidian renderer process; this stub keeps the bundle browser-only.\nmodule.exports = {};`,
+      loader: 'js',
+    }));
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Workaround 3 (main bundle): Electron renderer has IS_NODE_ENV=true so we use
 // the node build of transformers, but redirect onnxruntime-node (which is a
 // native addon) to the pure-WASM ort build so Obsidian can run it.
@@ -153,6 +176,10 @@ await esbuild.build({
     'onnxruntime-web/webgpu':
       './node_modules/onnxruntime-web/dist/ort.webgpu.bundle.min.mjs',
   },
+  // NOTE: stripNodeBuiltinsPlugin is intentionally NOT applied to the worker
+  // bundle. Worker runs transformers.js + ONNX runtime, both of which may
+  // touch node:crypto during model loading / inference (random seed paths).
+  // Stubbing it out breaks Chinese semantic embedding (verified 2026-05-21).
   plugins: [nativeStubPlugin],
   outfile: WORKER_BUNDLE_PATH,
   define: {
@@ -179,7 +206,12 @@ const context = await esbuild.context({
   treeShaking: true,
   minify: prod,
   outfile: path.join(PLUGIN_ROOT, 'main.js'),
-  plugins: [nativeStubPlugin, inlineWorkerSourcePlugin],
+  // stripNodeBuiltinsPlugin removes node:fs / node:crypto require() strings
+  // from the bundled sql.js Emscripten output (dead-code path that runs only
+  // when process.type !== "renderer"). Resolves Dashboard audit Finding 1
+  // (Direct Filesystem Access). Worker bundle does NOT apply this plugin —
+  // transformers.js / ONNX may need node:crypto for model load / random seed.
+  plugins: [nativeStubPlugin, inlineWorkerSourcePlugin, stripNodeBuiltinsPlugin],
 });
 
 if (prod) {
