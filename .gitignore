@@ -20,3 +20,10 @@ data.json
 .claude/
 .claude-memory
 opencode.json
+
+# AI agent configs (forum scrutiny defense)
+CLAUDE.md
+AGENTS.md
+
+# Private marketing drafts (not for publish)
+docs/marketing/
