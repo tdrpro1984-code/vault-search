@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.4 — 2026-06-02
+
+UX patch from forum-zh thread #61655 community feedback.
+
+### Fixed
+- **Duplicate-looking titles in result lists**. Template-generated notes that share the same `# H1` heading (a common pattern for clinical / journaling / log templates) previously all rendered with the same title in Search / Discover lists, making them indistinguishable. The H1 fallback now performs a collision check across the vault — H1s that appear in 2+ files automatically fall back to `file.basename` so each note remains visually unique. Frontmatter `title:` (when present) still wins unconditionally.
+
+### Notes
+- Existing indexes auto-migrate on the next **Update** — files whose stored title differs under the new rule are re-indexed transparently. No manual Rebuild required.
+
 ## 1.0.3 — 2026-05-21
 
 Audit compliance patch — addresses three findings raised by the Obsidian Developer Dashboard auto-audit.

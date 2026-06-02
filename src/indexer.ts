@@ -23,6 +23,7 @@ import type VaultSearchPlugin from "./main";
 import { SQLiteStore } from "./storage/SQLiteStore";
 import type { EmbeddingProvider } from "./embedding";
 import { splitChunks } from "./indexer/chunker";
+import { findH1Collisions, type FileTitleSource } from "./indexer/titleCollisions";
 import { meanPool } from "./utils/meanPool";
 import { stripFrontmatter } from "./utils";
 import { TOKENIZER_VERSION } from "./storage/cjkTokenize";
@@ -63,16 +64,47 @@ export class Indexer {
             .filter(f => !this.shouldExclude(f.path));
     }
 
-    private extractTitle(file: TFile): string {
+    /**
+     * Adapter: pull H1 + frontmatter-title presence from Obsidian's
+     * metadataCache and delegate to the pure findH1Collisions helper.
+     * The returned set contains H1 values shared across 2+ files where no
+     * frontmatter title overrides them — extractTitle() falls back to
+     * file.basename for those H1s.
+     */
+    private buildH1Collisions(files: TFile[]): Set<string> {
+        const items: FileTitleSource[] = files.map(file => {
+            const cache = this.plugin.app.metadataCache.getFileCache(file);
+            const hasFrontmatterTitle = cache?.frontmatter?.title != null;
+            const h1Raw = cache?.headings?.find(h => h.level === 1)?.heading;
+            const trimmed = h1Raw ? String(h1Raw).trim() : "";
+            return { hasFrontmatterTitle, h1: trimmed || null };
+        });
+        return findH1Collisions(items);
+    }
+
+    private extractTitle(file: TFile, h1Collisions?: Set<string>): string {
         const cache = this.plugin.app.metadataCache.getFileCache(file);
-        let title = String(
-            cache?.frontmatter?.title ??
-            cache?.headings?.find(h => h.level === 1)?.heading ??
-            file.basename
-        );
+
+        // Priority chain: frontmatter title > unique H1 > file.basename.
+        // H1 only wins when it's unique across the vault — duplicated H1s
+        // (typical of template-generated notes) fall through to basename.
+        let raw: string;
+        const fmTitle = cache?.frontmatter?.title;
+        if (fmTitle != null) {
+            raw = String(fmTitle);
+        } else {
+            const h1 = cache?.headings?.find(h => h.level === 1)?.heading;
+            const h1Trimmed = h1 ? String(h1).trim() : "";
+            if (h1Trimmed && !h1Collisions?.has(h1Trimmed)) {
+                raw = h1Trimmed;
+            } else {
+                raw = file.basename;
+            }
+        }
+
         // Strip wikilink syntax: [[path/name]] → name, [[name|alias]] → alias
-        if (typeof title === "string" && title.startsWith("[[") && title.endsWith("]]")) {
-            title = title.slice(2, -2);
+        if (raw.startsWith("[[") && raw.endsWith("]]")) {
+            let title = raw.slice(2, -2);
             const pipeIdx = title.indexOf("|");
             if (pipeIdx >= 0) {
                 title = title.slice(pipeIdx + 1);
@@ -80,8 +112,9 @@ export class Indexer {
                 const slashIdx = title.lastIndexOf("/");
                 if (slashIdx >= 0) title = title.slice(slashIdx + 1);
             }
+            return title;
         }
-        return title;
+        return raw;
     }
 
     private extractDescription(file: TFile): string | null {
@@ -137,6 +170,7 @@ export class Indexer {
         }
 
         const incomingSet = this.buildIncomingSet();
+        const h1Collisions = this.buildH1Collisions(files);
         const progress = new Notice(t.noticeIndexing(0, files.length), 0);
 
         let done = 0;
@@ -144,7 +178,7 @@ export class Indexer {
         let hot = 0;
         let cold = 0;
         for (const file of files) {
-            const ok = await this.indexOne(file, incomingSet);
+            const ok = await this.indexOne(file, incomingSet, h1Collisions);
             if (!ok) failed++;
             else {
                 const tier = this.computeTier(file, incomingSet);
@@ -213,6 +247,7 @@ export class Indexer {
 
         const files = this.getMarkdownFiles();
         const incomingSet = this.buildIncomingSet();
+        const h1Collisions = this.buildH1Collisions(files);
         const currentPaths = new Set(files.map(f => f.path));
 
         // Detect stale notes (renamed / deleted) by scanning stored body_vecs.
@@ -223,11 +258,24 @@ export class Indexer {
             }
         }
 
-        // Filter to notes needing re-embed: missing in store OR mtime newer.
+        // Filter to notes needing re-embed: missing in store OR mtime newer
+        // OR title changed (collision rules shifted, or 1.0.4 upgrade where
+        // stored titles predate H1 collision detection). Title is prepended
+        // into chunk content (see chunker.ts) so a stale title means stale
+        // BM25 + embedding — full re-index keeps storage consistent.
         const toReindex: TFile[] = [];
         for (const file of files) {
             const stored = this.store.getNote(file.path);
-            if (!stored || stored.mtime !== file.stat.mtime) {
+            if (!stored) {
+                toReindex.push(file);
+                continue;
+            }
+            if (stored.mtime !== file.stat.mtime) {
+                toReindex.push(file);
+                continue;
+            }
+            const currentTitle = this.extractTitle(file, h1Collisions);
+            if (stored.title !== currentTitle) {
                 toReindex.push(file);
             }
         }
@@ -252,7 +300,7 @@ export class Indexer {
         let done = 0;
         let failed = 0;
         for (const file of toReindex) {
-            const ok = await this.indexOne(file, incomingSet);
+            const ok = await this.indexOne(file, incomingSet, h1Collisions);
             if (!ok) failed++;
             done++;
             if (done % PROGRESS_STEP === 0 || done === toReindex.length) {
@@ -290,7 +338,8 @@ export class Indexer {
         await this.ensureProviderReady();
         if (this.store.isDisposed) return;
         const incomingSet = this.buildIncomingSet();
-        await this.indexOne(file, incomingSet);
+        const h1Collisions = this.buildH1Collisions(this.getMarkdownFiles());
+        await this.indexOne(file, incomingSet, h1Collisions);
         this.writeIndexMeta();
     }
 
@@ -307,7 +356,7 @@ export class Indexer {
     }
 
     /** Embed one file end-to-end. Returns false on failure (logged). */
-    private async indexOne(file: TFile, incomingSet: Set<string>): Promise<boolean> {
+    private async indexOne(file: TFile, incomingSet: Set<string>, h1Collisions?: Set<string>): Promise<boolean> {
         if (this.store.isDisposed) return false;
         const t0 = Date.now();
         try {
@@ -323,7 +372,7 @@ export class Indexer {
             if (fullBody.length > body.length) {
                 console.debug(`vault-curate: ${file.path} truncated ${fullBody.length} → ${body.length} chars`);
             }
-            const title = this.extractTitle(file);
+            const title = this.extractTitle(file, h1Collisions);
             const description = this.extractDescription(file);
             const tier = this.computeTier(file, incomingSet);
 
