@@ -13,7 +13,7 @@
 
 Traditional Chinese · Simplified Chinese · CJK · local-first · hybrid retrieval (BM25 + embeddings + fuzzy) · WebGPU on-device · no API keys
 
-[繁體中文](./README.zh-TW.md)
+[繁體中文](https://github.com/notoriouslab/vault-curate/blob/main/README.zh-TW.md)
 
 ![Vault Curate](./docs/intro.jpg)
 
