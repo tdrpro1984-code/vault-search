@@ -89,7 +89,8 @@ export class Indexer {
         // H1 only wins when it's unique across the vault — duplicated H1s
         // (typical of template-generated notes) fall through to basename.
         let raw: string;
-        const fmTitle = cache?.frontmatter?.title;
+        const fm: Record<string, unknown> | undefined = cache?.frontmatter;
+        const fmTitle = fm?.title;
         if (fmTitle != null) {
             raw = String(fmTitle);
         } else {
@@ -119,7 +120,7 @@ export class Indexer {
 
     private extractDescription(file: TFile): string | null {
         const cache = this.plugin.app.metadataCache.getFileCache(file);
-        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const fm: Record<string, unknown> | undefined = cache?.frontmatter;
         const desc = fm?.description;
         return typeof desc === "string" && desc.length > 0 ? desc : null;
     }
@@ -141,7 +142,7 @@ export class Indexer {
         const hasOutgoing = (cache?.links?.length ?? 0) > 0 || (cache?.embeds?.length ?? 0) > 0;
         const hasIncoming = incomingSet.has(file.path);
 
-        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const fm: Record<string, unknown> | undefined = cache?.frontmatter;
         const created = fm?.created;
         const createdTs = (typeof created === "string" || typeof created === "number")
             ? new Date(created).getTime()

@@ -772,7 +772,7 @@ export class SearchView extends ItemView {
         const file = this.app.vault.getAbstractFileByPath(result.path);
         if (!(file instanceof TFile)) return;
         const cache = this.app.metadataCache.getFileCache(file);
-        const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+        const fm: Record<string, unknown> | undefined = cache?.frontmatter;
         const desc = fm?.description;
         if (typeof desc === "string" && desc.trim().length > 0) return;
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.1 — 2026-07-07
+
+Audit compliance patch — addresses type-safety warnings raised by the Obsidian Developer Dashboard on the 1.1.0 audit. No behaviour changes.
+
+### Changed
+- Frontmatter access now uses type annotations instead of type assertions (`indexer.ts`, `main.ts`, `search-view.ts`) — resolves one unsafe-`any` assignment and four unnecessary-assertion warnings.
+- A vault `rename` event handler now explicitly `void`s its async re-index call (floating-promise warning).
+- Removed redundant type assertions in `types.ts` (settings default) and `workers/embeddingWorker.ts` (transformers.js pipeline options) — current typings accept the literals directly. Type-level only; emitted JS is identical.
+
+### Notes
+- The Dashboard's remaining recommendations are intentional and already disclosed in the README: vault enumeration (required for index build, scopable via `excludePatterns`) and extra release files (`*.wasm` fetched once at first run and cached). The `PluginSettingTab.display` deprecation (Obsidian 1.13+) is deferred — migrating to `getSettingDefinitions` would raise `minAppVersion` from 1.7.2 and drop users on 1.7–1.12.
+
 ## 1.1.0 — 2026-07-07
 
 New feature, from forum-zh thread #61655 community feedback.

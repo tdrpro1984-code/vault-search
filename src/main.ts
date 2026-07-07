@@ -274,7 +274,7 @@ export default class VaultSearchPlugin extends Plugin {
             this.registerEvent(
                 this.app.vault.on("rename", (file, oldPath) => {
                     if (file instanceof TFile) this.notifyPinOnFileRename(file);
-                    this.onFileRename(file, oldPath);
+                    void this.onFileRename(file, oldPath);
                 })
             );
         });
@@ -414,7 +414,7 @@ export default class VaultSearchPlugin extends Plugin {
             const file = this.app.vault.getAbstractFileByPath(r.path);
             if (!(file instanceof TFile) || file.extension !== "md") continue;
             const cache = this.app.metadataCache.getFileCache(file);
-            const fm = cache?.frontmatter as Record<string, unknown> | undefined;
+            const fm: Record<string, unknown> | undefined = cache?.frontmatter;
             const desc = fm?.description;
             if (desc === undefined || desc === null) {
                 targets.push(file);
@@ -780,11 +780,13 @@ export default class VaultSearchPlugin extends Plugin {
         delete settingsAny.minDescLength;
         delete settingsAny.index;
 
-        await this.saveData({ settings: this.settings } as VaultSearchData);
+        const migrated: VaultSearchData = { settings: this.settings };
+        await this.saveData(migrated);
     }
 
     async saveSettings() {
-        await this.saveData({ settings: this.settings } as VaultSearchData);
+        const data: VaultSearchData = { settings: this.settings };
+        await this.saveData(data);
     }
 
     /** Snapshot a malformed data.json before defaults overwrite it. Best-effort. */

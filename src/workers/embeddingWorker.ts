@@ -163,7 +163,7 @@ async function handleInit(msg: InitMsg): Promise<void> {
                     });
                 }
             },
-        } as unknown as Parameters<typeof pipeline>[2],
+        },
     );
 
     const hasWebGpu = typeof (self as unknown as { navigator?: { gpu?: unknown } }).navigator?.gpu !== 'undefined';

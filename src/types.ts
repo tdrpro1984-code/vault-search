@@ -46,7 +46,7 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     maxIndexableChars: 60000,
     ollamaUrl: "http://localhost:11434",
     ollamaModel: "qwen3-embedding:0.6b",
-    apiFormat: "ollama" as ApiFormat,
+    apiFormat: "ollama",
     apiKey: "",
     topResults: 10,
     minScore: 0.5,
