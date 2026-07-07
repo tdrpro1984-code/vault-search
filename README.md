@@ -141,6 +141,8 @@ Three entry points: the command palette, right-click **VC: Generate relation gra
 
 The output is a plain Canvas file — drag, edit, annotate, and delete freely.
 
+![Relation graph — semantic neighborhood on Canvas](./docs/relation-graph.png)
+
 ### AI curation (off by default)
 
 Turn it on under **Settings → AI Curation → Enable AI curation** to unlock three actions:
