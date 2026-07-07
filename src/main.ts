@@ -1,4 +1,4 @@
-import { Menu, normalizePath, Notice, Plugin, TFile, requestUrl } from "obsidian";
+import { Menu, normalizePath, Notice, Plugin, TFile, TFolder, requestUrl } from "obsidian";
 import workerSource from "@inline/worker";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import {
@@ -17,6 +17,7 @@ import { SearchModal } from "./searcher";
 import { SearchView, VIEW_TYPE_SEARCH } from "./search-view";
 import { VaultSearchSettingTab } from "./settings";
 import { findSimilarSqlite } from "./search/discoverSqlite";
+import { buildGraphCanvas, graphCanvasFileName } from "./canvas/graphCanvas";
 import { DescriptionGenerator } from "./description-generator";
 import { OnboardingModal, applyOnboardingChoice } from "./ui/OnboardingModal";
 import { loadWasmAsset } from "./runtime/wasmAssets";
@@ -126,6 +127,20 @@ export default class VaultSearchPlugin extends Plugin {
             },
         });
 
+        // Semantic Canvas Graph (006): same guard shape as find-similar.
+        this.addCommand({
+            id: "generate-graph-canvas",
+            name: t.cmdGenerateGraph,
+            checkCallback: (checking) => {
+                const file = this.app.workspace.getActiveFile();
+                if (!file || file.extension !== "md") return false;
+                if (!this.store) return false;
+                if (checking) return true;
+                void this.generateGraphCanvas(file);
+                return true;
+            },
+        });
+
         this.addCommand({
             id: "rebuild-index",
             name: t.cmdRebuild,
@@ -188,6 +203,11 @@ export default class VaultSearchPlugin extends Plugin {
                         item.setTitle(t.menuFindSimilar)
                             .setIcon("search")
                             .onClick(() => void this.findSimilar(file));
+                    });
+                    menu.addItem((item) => {
+                        item.setTitle(t.menuGenerateGraph)
+                            .setIcon("git-fork")
+                            .onClick(() => void this.generateGraphCanvas(file));
                     });
                 }
                 if (this.settings.enableAICuration) {
@@ -446,6 +466,63 @@ export default class VaultSearchPlugin extends Plugin {
         if (view) {
             view.showResults(topResults, t.similarTo(note.title));
         }
+    }
+
+    // ── Semantic Canvas Graph (006) ────────────────────
+
+    /** Generate an editable .canvas neighborhood graph for `file` and open
+     *  it. Shared by the command palette, file-menu, and Discover sidebar
+     *  entries. Never overwrites: each run creates a fresh stamped file. */
+    async generateGraphCanvas(file: TFile) {
+        const store = this.store;
+        if (!store) {
+            new Notice(t.noticeIndexEmpty);
+            return;
+        }
+        const note = store.getNote(file.path);
+        if (!note || note.bodyVec.length === 0) {
+            new Notice(t.notIndexed);
+            return;
+        }
+
+        const neighbors = findSimilarSqlite(file.path, store, {
+            minScore: this.settings.minScore,
+            topResults: this.settings.topResults,
+        });
+        if (neighbors.length === 0) {
+            new Notice(t.noticeGraphNoResults);
+            return;
+        }
+
+        const canvas = buildGraphCanvas(
+            { path: file.path, tier: note.tier ?? "hot" },
+            neighbors.map((r) => ({ path: r.path, tier: r.tier, score: r.score })),
+            this.app.metadataCache.resolvedLinks,
+        );
+
+        // Empty canvasFolder means vault root ("/" is how
+        // getAbstractFileByPath addresses the root folder).
+        const rawFolder = this.settings.canvasFolder.trim();
+        const folder = rawFolder ? normalizePath(rawFolder) : "/";
+        if (folder !== "/" && !this.app.vault.getAbstractFileByPath(folder)) {
+            await this.app.vault.createFolder(folder);
+        }
+        const parent = this.app.vault.getAbstractFileByPath(folder);
+        const existingNames = new Set<string>();
+        if (parent instanceof TFolder) {
+            for (const child of parent.children) existingNames.add(child.name);
+        }
+
+        const stamp = window.moment().format("YYYYMMDD-HHmmss");
+        const name = graphCanvasFileName(normalizePath(file.basename), stamp, existingNames);
+        const path = folder === "/" ? name : `${folder}/${name}`;
+
+        const created = await this.app.vault.create(
+            path,
+            JSON.stringify(canvas, null, "\t"),
+        );
+        await this.app.workspace.getLeaf(true).openFile(created);
+        new Notice(t.noticeGraphCreated(path));
     }
 
     async rebuildIndex() {

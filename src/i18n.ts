@@ -160,6 +160,15 @@ export interface Locale {
     discoverPinnedTo: (title: string) => string;
     discoverPinNoFile: string;
     discoverPinFileGone: string;
+    // Semantic Canvas Graph (006)
+    cmdGenerateGraph: string;
+    menuGenerateGraph: string;
+    discoverGraphBtn: string;
+    discoverGraphNoFile: string;
+    noticeGraphNoResults: string;
+    noticeGraphCreated: (path: string) => string;
+    settingCanvasFolder: string;
+    settingCanvasFolderDesc: string;
     noticeIndexCorrupt: string;
     indexingInProgress: string;
     viewDisplayName: string;
@@ -357,6 +366,14 @@ const en: Locale = {
     discoverPinnedTo: (title) => `Pinned to: ${title}`,
     discoverPinNoFile: "Open a note first, then pin Discover.",
     discoverPinFileGone: "Pinned note was deleted — Discover unpinned.",
+    cmdGenerateGraph: "Generate relation graph (Canvas)",
+    menuGenerateGraph: "VC: Generate relation graph",
+    discoverGraphBtn: "Graph",
+    discoverGraphNoFile: "Open a note first, then generate its relation graph.",
+    noticeGraphNoResults: "Vault Curate: No similar notes above the score threshold — graph not created. Lower 'Minimum score' in Advanced settings to widen the net.",
+    noticeGraphCreated: (path) => `Vault Curate: Relation graph created — ${path}`,
+    settingCanvasFolder: "Relation graph folder",
+    settingCanvasFolderDesc: "Where generated .canvas files are saved. Leave empty to use the vault root. If you point this at a folder your sync tool excludes, generated graphs won't sync.",
     noticeIndexCorrupt: "Vault Curate: Index file is corrupted. Please rebuild index.",
     indexingInProgress: "Vault Curate: Indexing already in progress",
     viewDisplayName: "Vault Curate",
@@ -574,6 +591,14 @@ const zhTW: Locale = {
     discoverPinnedTo: (title) => `已釘選：${title}`,
     discoverPinNoFile: "請先打開筆記，再釘選 Discover。",
     discoverPinFileGone: "已釘選筆記被刪除 — Discover 解除釘選。",
+    cmdGenerateGraph: "生成關聯圖（Canvas）",
+    menuGenerateGraph: "VC: 生成關聯圖",
+    discoverGraphBtn: "關聯圖",
+    discoverGraphNoFile: "請先打開筆記，再生成關聯圖。",
+    noticeGraphNoResults: "Vault Curate：沒有超過相似度門檻的筆記，未建立關聯圖。可到進階設定調低「最低分數」放寬條件。",
+    noticeGraphCreated: (path) => `Vault Curate：關聯圖已建立 — ${path}`,
+    settingCanvasFolder: "關聯圖資料夾",
+    settingCanvasFolderDesc: "生成的 .canvas 檔存放位置。留空 = vault 根目錄。若指到被同步工具排除的資料夾，生成的圖不會同步，請自行留意。",
     noticeIndexCorrupt: "Vault Curate：索引檔案已損壞，請重建索引。",
     indexingInProgress: "Vault Curate：正在索引中，請稍候",
     viewDisplayName: "語意搜尋",

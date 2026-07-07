@@ -228,6 +228,20 @@ export class SearchView extends ItemView {
             text: t.generateMoc,
             cls: "vault-curate-mode-btn vault-curate-moc-btn",
         });
+        // Semantic Canvas Graph (006) — graphs the pinned note if any,
+        // otherwise the active note (same target semantics as pin).
+        const graphBtn = modeBar.createEl("button", {
+            text: t.discoverGraphBtn,
+            cls: "vault-curate-mode-btn vault-curate-graph-btn",
+        });
+        graphBtn.addEventListener("click", () => {
+            const file = this.pinnedFile ?? this.app.workspace.getActiveFile();
+            if (!file || file.extension !== "md") {
+                new Notice(t.discoverGraphNoFile);
+                return;
+            }
+            void this.plugin.generateGraphCanvas(file);
+        });
         // Pin toggle — rightmost in mode bar, adjacent to mocBtn.
         this.pinBtn = modeBar.createEl("button", {
             text: "\u{1F4CC}",  // 📌

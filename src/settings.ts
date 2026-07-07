@@ -304,6 +304,19 @@ export class VaultSearchSettingTab extends PluginSettingTab {
                 });
             });
 
+        // Semantic Canvas Graph (006): destination folder for generated
+        // .canvas files. Empty = vault root.
+        new Setting(adv)
+            .setName(t.settingCanvasFolder)
+            .setDesc(t.settingCanvasFolderDesc)
+            .addText(text => {
+                text.setValue(this.plugin.settings.canvasFolder);
+                text.onChange(async (val) => {
+                    this.plugin.settings.canvasFolder = val;
+                    await this.plugin.saveSettings();
+                });
+            });
+
         new Setting(adv)
             .setName(t.maxEmbedChars)
             .setDesc(t.maxEmbedCharsDesc)

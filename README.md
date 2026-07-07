@@ -129,6 +129,18 @@ The "recent" cutoff is tunable in **Settings → Advanced → Hot window (days)*
 
 Right-click any `.md` → **VC: Find similar notes** → results show up in the sidebar; you can drag them straight to Canvas.
 
+### Relation graph (Canvas)
+
+Generate an editable **Obsidian Canvas** around any note: the note in the center (green), its top-K semantic neighbors laid out radially, every edge labeled with its similarity score.
+
+- **Purple edges** = semantically close but **not yet linked** — connections the native graph view can't show you
+- **Gray edges** (with direction arrows) = notes you've already wikilinked
+- **Cyan nodes** = Cold notes (untouched beyond the Hot window)
+
+Three entry points: the command palette, right-click **VC: Generate relation graph**, or the **Graph** button on the Discover sidebar (targets the pinned note if one is pinned). Each run writes a fresh timestamped `.canvas` into the folder set under Advanced → Relation graph folder (default `Vault Curate Canvases`) — your edited graphs are never overwritten. Want to go one hop deeper? Right-click any node inside the canvas → **VC: Generate relation graph**.
+
+The output is a plain Canvas file — drag, edit, annotate, and delete freely.
+
 ### AI curation (off by default)
 
 Turn it on under **Settings → AI Curation → Enable AI curation** to unlock three actions:
@@ -153,13 +165,15 @@ From Command Palette (Cmd/Ctrl+P), type `Vault Curate:` to see them all.
 | `Rebuild index` | Wipe the existing index and re-index everything | always available |
 | `Update index` | Incremental update (re-index files with newer mtime) | always available |
 | `Discover related Cold notes` | Global discover: Cold notes most related to your Hot pool | always available |
+| `Generate relation graph (Canvas)` | Editable Canvas of the active note's semantic neighborhood | always available |
 | `Generate description for active note` | LLM-write description + tags to the active file's frontmatter | AI curation on |
 | `Generate descriptions for current results` | Batch description for the current sidebar results | AI curation on |
 | `Generate MOC (topic-grouped)` | HDBSCAN cluster + LLM-name each group | AI curation on |
 
-Right-click menus expose two of these directly on a `.md`:
+Right-click menus expose three of these directly on a `.md`:
 
 - **VC: Find similar notes**
+- **VC: Generate relation graph**
 - **VC: Generate description** (AI curation on)
 
 ---
@@ -187,7 +201,7 @@ Changing the embedding provider or model triggers a confirmation modal — the i
 
 ### Advanced
 
-Collapsible `<details>` block: top results / min score / Hot window (days) / default search scope (Hot / Cold / All) / chunk size + overlap / synonym list / auto-index toggle / rebuild + update buttons / index stats.
+Collapsible `<details>` block: top results / min score / relation graph folder / Hot window (days) / default search scope (Hot / Cold / All) / chunk size + overlap / synonym list / auto-index toggle / rebuild + update buttons / index stats.
 
 ---
 

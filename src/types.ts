@@ -36,6 +36,9 @@ export interface VaultSearchSettings {
      *  asks the user explicitly on first launch; existing users keep their
      *  saved value because Object.assign only fills missing keys. */
     enableAICuration: boolean;
+    /** Semantic Canvas Graph (006): folder for generated .canvas files.
+     *  Empty string = vault root. */
+    canvasFolder: string;
 }
 
 export const DEFAULT_SETTINGS: VaultSearchSettings = {
@@ -57,6 +60,7 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     chunkSize: 2000,
     chunkOverlap: 100,
     enableAICuration: false,
+    canvasFolder: "Vault Curate Canvases",
 };
 
 /** data.json stores settings only — index lives in SQLite (Phase 4+). */
