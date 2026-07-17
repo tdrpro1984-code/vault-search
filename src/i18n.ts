@@ -149,6 +149,7 @@ export interface Locale {
     noticeIndexing: (done: number, total: number) => string;
     noticeDescBackfill: (total: number) => string;
     noticeDescBackfillDone: (written: number) => string;
+    noticeBuildingSearchIndex: string;
     noticeIndexDone: (total: number, hot: number, cold: number, failed: number) => string;
     noticeUpToDate: string;
     noticeUpdated: (updated: number, total: number, hot: number) => string;
@@ -352,6 +353,7 @@ const en: Locale = {
     noticeIndexing: (done, total) => `Vault Curate: Indexing ${done}/${total}...`,
     noticeDescBackfill: (total) => `Vault Curate: embedding ${total} descriptions (one-time upgrade, ~1-3 min)...`,
     noticeDescBackfillDone: (written) => `Vault Curate: description embeddings ready (${written} notes)`,
+    noticeBuildingSearchIndex: "Vault Curate: building keyword search index...",
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `, ${failed} failed` : "";
         return `Vault Curate: Done — ${total} notes (${hot} hot, ${cold} cold${f})`;
@@ -580,6 +582,7 @@ const zhTW: Locale = {
     noticeIndexing: (done, total) => `Vault Curate：索引中 ${done}/${total}...`,
     noticeDescBackfill: (total) => `Vault Curate：補嵌 ${total} 篇 description（升級一次性作業，約 1-3 分鐘）...`,
     noticeDescBackfillDone: (written) => `Vault Curate：description 向量就緒（${written} 篇）`,
+    noticeBuildingSearchIndex: "Vault Curate：建置關鍵字索引中...",
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `，${failed} 篇失敗` : "";
         return `Vault Curate：完成 — ${total} 篇（${hot} hot、${cold} cold${f}）`;

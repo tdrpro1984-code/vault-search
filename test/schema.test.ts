@@ -65,6 +65,24 @@ describe('applySchema 2 → 3 migration (007 D4)', () => {
         expect(version(db)).toBe(SCHEMA_VERSION);
     });
 
+    it('已是 v3 → no-op（不重複 ALTER、版本不變）', () => {
+        const db = makeV2Db();
+        applySchema(db); // 升到 v3
+        const before = columns(db);
+        applySchema(db); // v3 起始態
+        expect(version(db)).toBe(SCHEMA_VERSION);
+        expect(columns(db)).toEqual(before);
+    });
+
+    it("unknown/corrupted 版本字串（'banana'）→ 正規化到最新且補欄位", () => {
+        const db = makeV2Db();
+        db.run("UPDATE meta SET value='banana' WHERE key='schema_version'");
+        applySchema(db);
+        expect(version(db)).toBe(SCHEMA_VERSION);
+        expect(columns(db)).toContain('desc_vec');
+        expect(() => applySchema(db)).not.toThrow();
+    });
+
     it('v1 db 一路升到 3（backfill + ALTER 都跑）', () => {
         const db = makeV2Db();
         db.run("UPDATE meta SET value='1' WHERE key='schema_version'");

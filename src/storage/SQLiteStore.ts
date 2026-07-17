@@ -17,9 +17,10 @@ import { l2normalize } from '../utils/l2normalize';
 import { composeNoteVec } from '../utils/composeVec';
 import {
     tokenizeForBM25,
-    computeIdf,
-    scoreBM25,
+    buildBM25Index,
+    searchBM25Index,
     type BM25Doc,
+    type BM25Index,
 } from './bm25';
 
 // ─── Types (mirror design.md D2 + tasks.md Task 2.5) ──────────────────────────
@@ -79,6 +80,10 @@ export class SQLiteStore {
     // main.ts from settings.descWeight (store must not depend on plugin
     // settings directly). 0.5 = offline alpha-scan pick.
     private composeAlpha = 0.5;
+    // 007 D9: lazily built inverted index for searchBM25. Reset to null on
+    // any mutation that changes the corpus (chunks or descriptions);
+    // setDescVec deliberately does NOT reset it — desc TEXT is unchanged.
+    private bm25Index: BM25Index | null = null;
 
     private constructor(
         private readonly adapter: PersistAdapter,
@@ -90,8 +95,12 @@ export class SQLiteStore {
         return this.disposed;
     }
 
-    /** 007 D5: update the desc/body blend weight (settings.descWeight). */
+    /** 007 D5: update the desc/body blend weight (settings.descWeight).
+     *  Defense in depth vs main.ts's loadSettings sanitize: NaN slips through
+     *  Math.max/Math.min clamps (Math.min(NaN, 1) === NaN) and would poison
+     *  every composed vector — reject non-finite here too. */
     setComposeAlpha(alpha: number): void {
+        if (!Number.isFinite(alpha)) return; // keep current (default 0.5)
         this.composeAlpha = Math.max(0, Math.min(1, alpha));
     }
 
@@ -129,6 +138,7 @@ export class SQLiteStore {
                 note.descVec ? vecToBlob(note.descVec) : null,
             ],
         );
+        this.bm25Index = null; // description may have changed (D9)
         this.touch();
     }
 
@@ -181,6 +191,7 @@ export class SQLiteStore {
         if (this.disposed) return;
         // chunks cascade automatically via ON DELETE CASCADE.
         this.db.run('DELETE FROM notes WHERE path = ?', [path]);
+        this.bm25Index = null; // corpus shrank (D9)
         this.touch();
     }
 
@@ -237,6 +248,7 @@ export class SQLiteStore {
         } finally {
             insertChunk.free();
         }
+        this.bm25Index = null; // chunk contents changed (D9)
         this.touch();
     }
 
@@ -294,10 +306,12 @@ export class SQLiteStore {
     }
 
     /**
-     * Batch load all notes' light projection (path/title/tier/bodyVec) in one
+     * Batch load all notes' light projection (path/title/tier/noteVec) in one
      * SELECT. Used by Discover / Find Similar to avoid the per-note `getNote()`
      * SELECT inside hot cosine loops (the diff between this and N×`getNote()`
-     * is roughly 100x on a 10k-vault Discover render).
+     * is roughly 100x on a 10k-vault Discover render). `noteVec` is the
+     * composed + unit-norm ranking vector (007 D4) — same semantics as
+     * getNoteVec().
      */
     getAllNotesLight(): Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; noteVec: Float32Array }> {
         const res = this.db.exec(
@@ -327,31 +341,20 @@ export class SQLiteStore {
 
     // ─── BM25 search (pure TypeScript, see bm25.ts for rationale) ─────────────
 
-    /**
-     * BM25 search over chunks.content.
-     *
-     * Implementation note: sql.js 1.14.1 doesn't ship FTS5, so we compute BM25
-     * in TypeScript over the chunks table. For very large vaults (10k+ chunks)
-     * this gets slow; a future change can swap the implementation behind this
-     * API (signature contract preserved).
-     *
-     * @param query Raw query string. Tokenisation happens internally.
-     */
-    searchBM25(query: string, limit: number): BM25Hit[] {
-        const queryTokens = tokenizeForBM25(query);
-        if (queryTokens.length === 0) return [];
-
-        // Load all (note_path, chunk_index, content) tuples and tokenise.
+    /** Gather the BM25 corpus: all chunks + one desc virtual doc per note. */
+    private collectBM25Docs(): BM25Doc[] {
+        const docs: BM25Doc[] = [];
         const res = this.db.exec(
             `SELECT note_path, chunk_index, content FROM chunks`,
         );
-        if (res.length === 0 || res[0].values.length === 0) return [];
-
-        const docs: BM25Doc[] = res[0].values.map((row) => ({
-            id: `${row[0] as string}#${row[1] as number}`,
-            tokens: tokenizeForBM25(row[2] as string),
-        }));
-
+        if (res.length > 0) {
+            for (const row of res[0].values) {
+                docs.push({
+                    id: `${row[0] as string}#${row[1] as number}`,
+                    tokens: tokenizeForBM25(row[2] as string),
+                });
+            }
+        }
         // 007 D7: descriptions join the BM25 pool as one virtual doc per note
         // (chunkIndex -1 convention). Rare terms that live only in a
         // description become keyword-searchable. Sole consumer (searchHybrid)
@@ -367,9 +370,39 @@ export class SQLiteStore {
                 });
             }
         }
+        return docs;
+    }
 
-        const idf = computeIdf(queryTokens, docs);
-        const ranked = scoreBM25(queryTokens, docs, idf, limit);
+    /**
+     * Build (or reuse) the inverted index (007 D9). Building tokenizes the
+     * whole corpus (~2-3s on a 10k-doc vault, synchronous) — the indexer
+     * calls this at the end of rebuild()/update() so searches almost never
+     * pay it; mutations since the last build reset the cache (see touchIndex
+     * call sites).
+     */
+    warmBM25Index(): void {
+        if (this.disposed) return;
+        if (this.bm25Index) return;
+        this.bm25Index = buildBM25Index(this.collectBM25Docs());
+    }
+
+    /**
+     * BM25 search over chunks.content + description virtual docs.
+     *
+     * Implementation note: sql.js 1.14.1 doesn't ship FTS5, so BM25 runs in
+     * TypeScript over a prebuilt inverted index (007 D9 — previously every
+     * query re-tokenized the corpus, ~2s per search on a 10k-doc vault; now
+     * <1ms after the first build).
+     *
+     * @param query Raw query string. Tokenisation happens internally.
+     */
+    searchBM25(query: string, limit: number): BM25Hit[] {
+        const queryTokens = tokenizeForBM25(query);
+        if (queryTokens.length === 0) return [];
+
+        this.warmBM25Index();
+        if (!this.bm25Index) return [];
+        const ranked = searchBM25Index(this.bm25Index, queryTokens, limit);
 
         return ranked.map((hit) => {
             const hashIdx = hit.id.lastIndexOf('#');
@@ -400,6 +433,7 @@ export class SQLiteStore {
     /** Provider switch: clear all indexed data but preserve schema + meta.schema_version. */
     clearAllData(): void {
         if (this.disposed) return;
+        this.bm25Index = null; // corpus wiped (D9)
         // Wrap multi-statement clear in a transaction so a crash mid-clear
         // leaves notes + chunks consistent (no orphaned chunks rows). If exec
         // throws partway, ROLLBACK best-effort so the next mutation doesn't

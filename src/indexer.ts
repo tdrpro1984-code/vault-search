@@ -202,6 +202,12 @@ export class Indexer {
         // writeIndexMeta() (indexSingleFile calls that on every file edit).
         this.store.setMeta("denoise_version", DENOISE_VERSION);
         await this.store.flush();
+        // 007 D9: pay the inverted-index build here (index was invalidated by
+        // the upserts above) so the user's next search is <1ms, not ~3s.
+        // Wrapped in a Notice — a silent multi-second freeze right after the
+        // progress notice hides reads as a hang (compliance review W1).
+        const warmNotice1 = new Notice(t.noticeBuildingSearchIndex, 0);
+        try { this.store.warmBM25Index(); } finally { warmNotice1.hide(); }
 
         new Notice(t.noticeIndexDone(done - failed, hot, cold, failed), 10000);
         if (this.emptySkippedCount > 0) {
@@ -360,6 +366,11 @@ export class Indexer {
         this.store.setMeta("denoise_version", DENOISE_VERSION);
         await this.backfillDescVecs();
         await this.store.flush();
+        // 007 D9: same as rebuild() — rebuild the BM25 index while we're
+        // already in an indexing pass. The up-to-date early return above
+        // deliberately does NOT warm (would add ~3s to every clean startup).
+        const warmNotice2 = new Notice(t.noticeBuildingSearchIndex, 0);
+        try { this.store.warmBM25Index(); } finally { warmNotice2.hide(); }
 
         const total = files.length;
         const hot = files
@@ -414,10 +425,17 @@ export class Indexer {
         try {
             for (let i = 0; i < pending.length; i += EMBED_BATCH_SIZE) {
                 if (this.store.isDisposed) return;
-                const batch = pending
+                const mapped = pending
                     .slice(i, i + EMBED_BATCH_SIZE)
-                    .map(p => ({ path: p.path, input: denoiseForEmbed(p.description) }))
-                    .filter(p => p.input.trim().length > 0);
+                    .map(p => ({ path: p.path, input: denoiseForEmbed(p.description) }));
+                // Denoise-empty descriptions get the zero-length sentinel so
+                // they leave the pending set — skipping them silently meant
+                // infinite retry on every update() AND a spurious startup
+                // update-kick for affected vaults (audit C2).
+                for (const p of mapped) {
+                    if (p.input.trim().length === 0) this.store.setDescVec(p.path, new Float32Array(0));
+                }
+                const batch = mapped.filter(p => p.input.trim().length > 0);
                 if (batch.length === 0) continue;
                 try {
                     const vecs = await this.provider.embed(batch.map(p => p.input));
@@ -500,6 +518,13 @@ export class Indexer {
                 const descInput = denoiseForEmbed(description);
                 if (descInput.trim().length > 0) {
                     descVec = (await this.provider.embed([descInput]))[0] ?? null;
+                } else {
+                    // Denoises to nothing (e.g. pure symbol runs): store a
+                    // zero-length sentinel, NOT null — null re-enters the
+                    // backfill pending set on every update() forever (audit
+                    // C2). Read side: length mismatch → compose falls back
+                    // to the pure body vector.
+                    descVec = new Float32Array(0);
                 }
             }
             if (this.store.isDisposed) return false;

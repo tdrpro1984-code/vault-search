@@ -24,7 +24,10 @@ export function composeNoteVec(
     alpha: number,
 ): Float32Array {
     const nb = l2normalize(bodyVec);
-    if (!descVec || descVec.length !== bodyVec.length || alpha <= 0) return nb;
+    // Non-finite alpha (NaN via tampered settings) must not poison the vector
+    // — NaN survives Math.min/max clamps upstream and NaN scores bypass every
+    // `score < minScore` filter downstream (red-team finding).
+    if (!descVec || descVec.length !== bodyVec.length || !Number.isFinite(alpha) || alpha <= 0) return nb;
     const nd = l2normalize(descVec);
     const out = new Float32Array(nb.length);
     for (let i = 0; i < nb.length; i++) {

@@ -47,6 +47,21 @@ describe('BM25 description 虛擬 doc (007 D7)', () => {
         expect(hits[0].chunkIndex).toBe(0);
     });
 
+    it('空向量哨兵（denoise-empty desc）：非 NULL、退出 pending、compose fallback 安全（稽核 C2 回歸）', () => {
+        const vec = new Float32Array([1, 0]);
+        store.upsertNote({
+            path: 'note-sentinel.md', mtime: 1, title: '哨兵',
+            description: '··········具字數但淨化後為空··········',
+            tier: 'hot', bodyVec: vec, bodyDim: 2, indexedAt: 1, descVec: null,
+        });
+        expect(store.countDescBackfillPending(10)).toBeGreaterThan(0);
+        store.setDescVec('note-sentinel.md', new Float32Array(0));
+        expect(store.listDescBackfillPending(10).map(p => p.path)).not.toContain('note-sentinel.md');
+        const nv = store.getNoteVec('note-sentinel.md');
+        expect(nv).not.toBeNull();
+        expect(nv!.every(x => Number.isFinite(x))).toBe(true);
+    });
+
     it('無 description 的 note 不產生虛擬 doc（不 throw）', () => {
         const vec = new Float32Array([0, 1]);
         store.upsertNote({

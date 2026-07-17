@@ -51,4 +51,14 @@ describe('composeNoteVec (007 D4/D5)', () => {
         const z = composeNoteVec(new Float32Array([0, 0]), null, 0.5);
         expect(Number.isNaN(z[0])).toBe(false);
     });
+
+    it('NaN / Infinity alpha（data.json 竄改）→ fallback 純 body，零 NaN 外洩（紅隊 C1 回歸）', () => {
+        for (const bad of [NaN, Infinity, -Infinity]) {
+            const v = composeNoteVec(body, desc, bad as number);
+            expect(v.every(x => Number.isFinite(x))).toBe(true);
+        }
+        const nanCase = composeNoteVec(body, desc, NaN);
+        const fb = composeNoteVec(body, null, 0.5);
+        for (let i = 0; i < fb.length; i++) expect(nanCase[i]).toBeCloseTo(fb[i], 6);
+    });
 });

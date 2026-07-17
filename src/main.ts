@@ -790,6 +790,22 @@ export default class VaultSearchPlugin extends Plugin {
             ? Math.min(Math.trunc(tr), 100)
             : DEFAULT_SETTINGS.topResults;
 
+        // 007 D5 hidden settings share the same tamper surface (data.json is
+        // their ONLY edit path). A non-numeric descWeight would ride
+        // Math.min/Math.max as NaN into every composed note vector — and NaN
+        // scores pass every `score < minScore` filter silently (red-team
+        // finding, 1.2.0 pre-release review). Same guard for minDescChars:
+        // NaN makes the backfill's `length(description) >= ?` never match,
+        // silently disabling the upgrade path.
+        const dw = Number(this.settings.descWeight);
+        this.settings.descWeight = Number.isFinite(dw)
+            ? Math.max(0, Math.min(dw, 1))
+            : DEFAULT_SETTINGS.descWeight;
+        const mdc = Number(this.settings.minDescChars);
+        this.settings.minDescChars = Number.isFinite(mdc) && mdc >= 0
+            ? Math.trunc(mdc)
+            : DEFAULT_SETTINGS.minDescChars;
+
         // Phase 8 (004 rebrand): strip legacy v0.3.x fields that were carried
         // along by the loose Object.assign spread. Avoids stale `chunkingMode`,
         // `minDescLength`, and embedded `index` chunks polluting data.json.
