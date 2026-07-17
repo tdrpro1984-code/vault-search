@@ -1,6 +1,7 @@
 import { Menu, normalizePath, Notice, Plugin, TFile, TFolder, requestUrl } from "obsidian";
 import workerSource from "@inline/worker";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
+import { DENOISE_VERSION } from "./indexer/denoise";
 import {
     createProvider,
     type EmbeddingProvider,
@@ -298,6 +299,20 @@ export default class VaultSearchPlugin extends Plugin {
             const dismissed = this.store.getMeta("onboarding_dismissed");
             if (!indexed && !dismissed) {
                 this.showOnboardingModal();
+            }
+            // 007 D2: upgrade re-embed scans live at the top of update(), but
+            // nothing ever called update() on startup — an upgraded plugin
+            // would never run them (real-vault dogfood finding). Kick one
+            // incremental update when the denoise rule set version is stale
+            // OR descriptions await their backfill embedding (007 D4 —
+            // schema v3 upgrade leaves existing desc_vec NULL). Bonus: the
+            // pre-existing tokenizer/model rebuild checks at the top of
+            // update() get a startup trigger through the same call.
+            const denoiseStale = this.store.getMeta("denoise_version") !== DENOISE_VERSION;
+            const descPending = this.store.countDescBackfillPending(this.settings.minDescChars) > 0;
+            if (indexed && (denoiseStale || descPending)) {
+                console.debug(`vault-curate: upgrade work pending (denoiseStale=${denoiseStale}, descBackfill=${descPending}) — kicking incremental update`);
+                void this.updateIndex();
             }
         });
         console.debug("Vault Curate loaded");
@@ -648,6 +663,9 @@ export default class VaultSearchPlugin extends Plugin {
             exists: (path) => this.app.vault.adapter.exists(path),
         };
         const store = await SQLiteStore.open(adapter, this.dbPath(), this.sqlWasmBinary);
+        // 007 D5: inject the desc/body blend weight (store must not read
+        // plugin settings itself). Re-injected on every saveSettings().
+        store.setComposeAlpha(this.settings.descWeight);
         await this.dropLegacyIndexJson();
         return store;
     }
@@ -787,6 +805,8 @@ export default class VaultSearchPlugin extends Plugin {
     async saveSettings() {
         const data: VaultSearchData = { settings: this.settings };
         await this.saveData(data);
+        // 007 D5: keep the store's blend weight in sync with settings.
+        this.store?.setComposeAlpha(this.settings.descWeight);
     }
 
     /** Snapshot a malformed data.json before defaults overwrite it. Best-effort. */

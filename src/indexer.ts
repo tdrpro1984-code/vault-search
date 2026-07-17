@@ -6,7 +6,8 @@
  * Pipeline per .md file:
  *   1. read content + frontmatter (description / tags / tier inputs)
  *   2. body = stripFrontmatter; chunks = splitChunks(body, title, settings)
- *   3. chunkVecs = await provider.embed(chunks.map(c => c.content))
+ *   3. chunkVecs = await provider.embed(chunks.map(c => denoiseForEmbed(c.content)))
+ *      (007 D1: embed input is denoised; stored chunk content stays raw)
  *   4. bodyVec = meanPool(chunkVecs)
  *   5. store.upsertNote(...) + store.upsertChunks(...)
  *
@@ -23,6 +24,7 @@ import type VaultSearchPlugin from "./main";
 import { SQLiteStore } from "./storage/SQLiteStore";
 import type { EmbeddingProvider } from "./embedding";
 import { splitChunks } from "./indexer/chunker";
+import { denoiseForEmbed, hasDenoisableContent, DENOISE_VERSION } from "./indexer/denoise";
 import { findH1Collisions, type FileTitleSource } from "./indexer/titleCollisions";
 import { meanPool } from "./utils/meanPool";
 import { stripFrontmatter } from "./utils";
@@ -195,6 +197,10 @@ export class Indexer {
 
         progress.hide();
         this.writeIndexMeta();
+        // Full rebuild embeds everything through denoiseForEmbed, so the
+        // one-time upgrade scan is moot — stamp it done. MUST stay outside
+        // writeIndexMeta() (indexSingleFile calls that on every file edit).
+        this.store.setMeta("denoise_version", DENOISE_VERSION);
         await this.store.flush();
 
         new Notice(t.noticeIndexDone(done - failed, hot, cold, failed), 10000);
@@ -246,6 +252,15 @@ export class Indexer {
             return;
         }
 
+        // One-time denoise upgrade scan (007 D2): when the rule set version
+        // changed (or was never stamped — pre-1.2.0 index), notes whose body
+        // contains denoisable symbols need a re-embed. Detection uses
+        // hasDenoisableContent (pure regex test), NEVER denoiseForEmbed(x)!==x —
+        // whitespace folding would flag nearly every note and degenerate this
+        // into a full rebuild. Measured re-embed surface: 16% of the dogfood
+        // vault (design D3).
+        const denoiseUpgrade = hasIndex && this.store.getMeta("denoise_version") !== DENOISE_VERSION;
+
         const files = this.getMarkdownFiles();
         const incomingSet = this.buildIncomingSet();
         const h1Collisions = this.buildH1Collisions(files);
@@ -278,7 +293,17 @@ export class Indexer {
             const currentTitle = this.extractTitle(file, h1Collisions);
             if (stored.title !== currentTitle) {
                 toReindex.push(file);
+                continue;
             }
+            if (denoiseUpgrade) {
+                const content = await this.plugin.app.vault.cachedRead(file);
+                if (hasDenoisableContent(stripFrontmatter(content))) {
+                    toReindex.push(file);
+                }
+            }
+        }
+        if (denoiseUpgrade) {
+            console.debug(`vault-curate: denoise upgrade scan → ${toReindex.length} notes to re-embed (rule set v${DENOISE_VERSION})`);
         }
 
         if (toReindex.length === 0) {
@@ -292,6 +317,11 @@ export class Indexer {
                     this.store.upsertNote({ ...stored, tier: newTier });
                 }
             }
+            // Scan ran and found nothing to re-embed — stamp so it never re-runs.
+            // MUST stay outside writeIndexMeta(): indexSingleFile also calls that,
+            // and a single-file edit would falsely mark the one-time scan as done.
+            if (denoiseUpgrade) this.store.setMeta("denoise_version", DENOISE_VERSION);
+            await this.backfillDescVecs();
             await this.store.flush();
             new Notice(t.noticeUpToDate);
             return;
@@ -322,6 +352,13 @@ export class Indexer {
         }
 
         this.writeIndexMeta();
+        // Unconditional: either the upgrade scan just completed, or everything
+        // (re)indexed in this pass already went through denoiseForEmbed (fresh
+        // index). MUST stay outside writeIndexMeta(): indexSingleFile also
+        // calls that, and a single-file edit would falsely mark the one-time
+        // scan as done.
+        this.store.setMeta("denoise_version", DENOISE_VERSION);
+        await this.backfillDescVecs();
         await this.store.flush();
 
         const total = files.length;
@@ -354,6 +391,56 @@ export class Indexer {
         // would be a row-level update, but renames are rare enough that this is fine.
         this.store.deleteNote(oldPath);
         await this.indexSingleFile(file);
+    }
+
+    /**
+     * 007 D4 self-healing backfill: embed descriptions for notes whose
+     * desc_vec is NULL (schema v3 upgrade left existing rows NULL and an
+     * unchanged mtime never re-indexes them). Descriptions only — no chunk
+     * re-embed — so a full-vault backfill costs seconds, not minutes.
+     */
+    private async backfillDescVecs(): Promise<void> {
+        const pending = this.store.listDescBackfillPending(this.plugin.settings.minDescChars);
+        if (pending.length === 0) return;
+        // Silent multi-minute background work reads as "nothing happened" and
+        // users reach for manual full rebuilds (dogfood finding, twice) — show
+        // progress for any non-trivial backfill.
+        const progress = pending.length > 20
+            ? new Notice(t.noticeDescBackfill(pending.length), 0)
+            : null;
+        console.debug(`vault-curate: desc backfill → ${pending.length} descriptions to embed`);
+        let written = 0;
+        let failedBatches = 0;
+        try {
+            for (let i = 0; i < pending.length; i += EMBED_BATCH_SIZE) {
+                if (this.store.isDisposed) return;
+                const batch = pending
+                    .slice(i, i + EMBED_BATCH_SIZE)
+                    .map(p => ({ path: p.path, input: denoiseForEmbed(p.description) }))
+                    .filter(p => p.input.trim().length > 0);
+                if (batch.length === 0) continue;
+                try {
+                    const vecs = await this.provider.embed(batch.map(p => p.input));
+                    batch.forEach((p, j) => {
+                        if (vecs[j]) {
+                            this.store.setDescVec(p.path, vecs[j]);
+                            written++;
+                        }
+                    });
+                } catch (err) {
+                    // One bad batch must not kill the whole pass — skipped
+                    // notes stay NULL and the self-healing query retries them
+                    // on the next update().
+                    failedBatches++;
+                    console.warn(`vault-curate: desc backfill batch failed (notes ${i}-${i + batch.length})`, err);
+                }
+            }
+        } finally {
+            progress?.hide();
+        }
+        await this.store.flush();
+        new Notice(t.noticeDescBackfillDone(written), 5000);
+        console.debug(`vault-curate: desc backfill complete (${written} written, ${failedBatches} failed batches)`);
     }
 
     /** Embed one file end-to-end. Returns false on failure (logged). */
@@ -389,7 +476,9 @@ export class Indexer {
                 if (this.store.isDisposed) return false;
                 const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
                 const tBatch = Date.now();
-                const vecs = await this.provider.embed(batch.map(c => c.content));
+                // Embedding input is denoised (007 D1); chunks.content below
+                // keeps the raw text so BM25 + snippets are unaffected.
+                const vecs = await this.provider.embed(batch.map(c => denoiseForEmbed(c.content)));
                 console.debug(`vault-curate: embedded batch of ${batch.length} (${Date.now() - tBatch}ms)`);
                 chunkVecs.push(...vecs);
             }
@@ -403,6 +492,18 @@ export class Indexer {
 
             const bodyVec = meanPool(chunkVecs);
 
+            // 007 D4: description gets its own embedding for weighted
+            // note-vector composition. Too-short descriptions are noise —
+            // treat as absent (minDescChars, D5).
+            let descVec: Float32Array | null = null;
+            if (description && description.length >= this.plugin.settings.minDescChars) {
+                const descInput = denoiseForEmbed(description);
+                if (descInput.trim().length > 0) {
+                    descVec = (await this.provider.embed([descInput]))[0] ?? null;
+                }
+            }
+            if (this.store.isDisposed) return false;
+
             this.store.upsertNote({
                 path: file.path,
                 mtime: file.stat.mtime,
@@ -412,6 +513,7 @@ export class Indexer {
                 bodyVec,
                 bodyDim: bodyVec.length,
                 indexedAt: Date.now(),
+                descVec,
             });
 
             this.store.upsertChunks(file.path, chunks.map((c, i) => ({

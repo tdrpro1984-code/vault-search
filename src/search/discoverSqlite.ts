@@ -1,9 +1,10 @@
 // Discover (SQLite-backed) — Phase 8 of 004 rebrand.
 //
-// Embeddings are L2-normalized at index time, so dot product is cosine
-// similarity. All public functions go through `getAllNotesLight()` —
-// a single SELECT that bundles (path, title, tier, body_vec) — instead
-// of N times `getNote()` inside the candidate loop.
+// 007: ranking vectors are composed + unit-norm at the store read boundary
+// (`noteVec` = desc-weighted blend, see SQLiteStore.getAllNotesLight /
+// getNoteVec), so dot product IS cosine similarity. All public functions go
+// through `getAllNotesLight()` — a single SELECT per call — instead of
+// N times `getNote()` inside the candidate loop.
 //
 // `dimGuard()` defends against provider-switch mid-state where the query
 // vector and stored vectors have different dimensions. We warn once per
@@ -37,11 +38,11 @@ export async function discoverForNoteSqlite(
     settings: DiscoverSettings,
     cancelled?: { value: boolean },
 ): Promise<SearchResult[]> {
-    const self = store.getNote(currentPath);
-    if (!self || self.bodyVec.length === 0) return [];
+    const queryVec = store.getNoteVec(currentPath);
+    if (!queryVec || queryVec.length === 0) return [];
 
     const all = store.getAllNotesLight();
-    const queryDim = self.bodyVec.length;
+    const queryDim = queryVec.length;
     const results: SearchResult[] = [];
     let dimMismatchCount = 0;
 
@@ -49,11 +50,11 @@ export async function discoverForNoteSqlite(
         if (cancelled?.value) break;
         const row = all[i];
         if (row.path === currentPath) continue;
-        if (row.bodyVec.length !== queryDim) {
+        if (row.noteVec.length !== queryDim) {
             dimMismatchCount++;
             continue;
         }
-        const score = cosineNormalized(self.bodyVec, row.bodyVec);
+        const score = cosineNormalized(queryVec, row.noteVec);
         if (score < settings.minScore) continue;
         results.push({
             path: row.path,
@@ -89,10 +90,10 @@ export async function globalDiscoverSqlite(
     let queryDim = 0;
 
     for (const row of all) {
-        if (row.bodyVec.length === 0) continue;
-        if (queryDim === 0) queryDim = row.bodyVec.length;
-        if (row.tier === "cold") cold.push({ path: row.path, title: row.title, vec: row.bodyVec });
-        else hot.push(row.bodyVec);
+        if (row.noteVec.length === 0) continue;
+        if (queryDim === 0) queryDim = row.noteVec.length;
+        if (row.tier === "cold") cold.push({ path: row.path, title: row.title, vec: row.noteVec });
+        else hot.push(row.noteVec);
     }
     if (hot.length === 0 || cold.length === 0) return [];
 
@@ -144,21 +145,21 @@ export function findSimilarSqlite(
     store: SQLiteStore,
     settings: DiscoverSettings,
 ): SearchResult[] {
-    const self = store.getNote(currentPath);
-    if (!self || self.bodyVec.length === 0) return [];
+    const queryVec = store.getNoteVec(currentPath);
+    if (!queryVec || queryVec.length === 0) return [];
 
-    const queryDim = self.bodyVec.length;
+    const queryDim = queryVec.length;
     const all = store.getAllNotesLight();
     const results: SearchResult[] = [];
     let dimMismatchCount = 0;
 
     for (const row of all) {
         if (row.path === currentPath) continue;
-        if (row.bodyVec.length !== queryDim) {
+        if (row.noteVec.length !== queryDim) {
             dimMismatchCount++;
             continue;
         }
-        const score = cosineNormalized(self.bodyVec, row.bodyVec);
+        const score = cosineNormalized(queryVec, row.noteVec);
         if (score < settings.minScore) continue;
         results.push({
             path: row.path,

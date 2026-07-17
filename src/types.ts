@@ -23,6 +23,12 @@ export interface VaultSearchSettings {
     topResults: number;
     minScore: number;
     maxEmbedChars: number;
+    /** 007 D5: desc/body blend weight for note-vector composition.
+     *  Hidden setting (no UI control) — tune via data.json. */
+    descWeight: number;
+    /** 007 D5: descriptions shorter than this are treated as absent
+     *  (too short = embedding noise). Hidden setting. */
+    minDescChars: number;
     hotDays: number;
     searchScope: "hot" | "all" | "cold";
     excludePatterns: string[];
@@ -51,6 +57,8 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     topResults: 10,
     minScore: 0.5,
     maxEmbedChars: 2000,
+    descWeight: 0.5,
+    minDescChars: 10,
     hotDays: 90,
     searchScope: "hot",
     excludePatterns: ["_templates/", "templates/", ".trash/", "3_wiki/"],

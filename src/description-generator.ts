@@ -3,15 +3,26 @@
 // Phase 6 demotion (design.md D7): the v0.3.x "scan whole vault → write
 // preview report → apply" pipeline is removed. Description is now an opt-in
 // per-note action — triggered from commands, the file-menu, or the Discover
-// sidebar. Embedding ranking no longer depends on description (D3), so this
-// module is pure UX glue: LLM call → frontmatter merge → wikilink defense.
+// sidebar.
+//
+// 007 UPDATE: descriptions are load-bearing again — they get their own
+// embedding and blend into the note ranking vector (007 D4/D5). Output
+// quality therefore matters: sampling runs through denoiseForEmbed first
+// (symbol noise wastes the LLM's context budget) and takes head+tail
+// (template-heavy notes put the personal content at the end; head-only
+// sampling made the LLM describe the template — 007 D6).
 
 import { Notice, TFile } from "obsidian";
 import type VaultSearchPlugin from "./main";
 import { checkOllama, requestLlmJson, stripFrontmatter } from "./utils";
+import { denoiseForEmbed } from "./indexer/denoise";
 import { t } from "./i18n";
 
+// LLM sampling budget (007 D6): total stays 2000 chars, split head 1200 +
+// tail 800 when the (denoised) body is longer — see sampleForLlm().
 const BODY_CAP = 2000;
+const HEAD_CAP = 1200;
+const TAIL_CAP = 800;
 const DESCRIPTION_LENGTH_CAP = 500;
 const TAG_LENGTH_CAP = 64;
 
@@ -71,6 +82,29 @@ function safeSlice(text: string, max: number): string {
     const code = text.charCodeAt(cut - 1);
     if (code >= 0xd800 && code <= 0xdbff) cut--;
     return text.slice(0, cut);
+}
+
+/** Tail counterpart of safeSlice: last `max` code units, surrogate-safe. */
+function safeTail(text: string, max: number): string {
+    if (max <= 0) return "";
+    if (text.length <= max) return text;
+    let start = text.length - max;
+    // If we landed on a low surrogate, skip forward one code unit.
+    const code = text.charCodeAt(start);
+    if (code >= 0xdc00 && code <= 0xdfff) start++;
+    return text.slice(start);
+}
+
+/**
+ * LLM input sampling (007 D6): denoise first (symbols waste context budget),
+ * then head 1200 + tail 800 when longer than 2000 — template-heavy notes
+ * keep their personal content near the end, and head-only sampling used to
+ * make the LLM describe the template instead of the person/topic.
+ */
+export function sampleForLlm(rawBody: string): string {
+    const clean = denoiseForEmbed(rawBody);
+    if (clean.length <= BODY_CAP) return clean;
+    return `${safeSlice(clean, HEAD_CAP)}\n…\n${safeTail(clean, TAIL_CAP)}`;
 }
 
 export class DescriptionGenerator {
@@ -153,9 +187,8 @@ export class DescriptionGenerator {
             const { ollamaUrl, llmModel } = this.plugin.settings;
             const title = this.extractTitle(file);
             const rawBody = stripFrontmatter(await this.plugin.app.vault.cachedRead(file));
-            // Slice on UTF-16 code units but never split a surrogate pair —
-            // emoji-heavy notes would otherwise feed invalid UTF-16 to the LLM.
-            const body = safeSlice(rawBody, BODY_CAP);
+            // 007 D6: denoise + head/tail sampling (surrogate-safe slices).
+            const body = sampleForLlm(rawBody);
             const cache = this.plugin.app.metadataCache.getFileCache(file);
             const existingTagsRaw = cache?.frontmatter?.tags as unknown;
             const existingTags: string[] = Array.isArray(existingTagsRaw)

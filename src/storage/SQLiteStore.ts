@@ -13,6 +13,8 @@ import type { Database } from 'sql.js';
 import { openDb, exportDb } from './sqlJsRuntime';
 import { applySchema } from './schema';
 import { vecToBlob, blobToVec } from './vecCodec';
+import { l2normalize } from '../utils/l2normalize';
+import { composeNoteVec } from '../utils/composeVec';
 import {
     tokenizeForBM25,
     computeIdf,
@@ -31,6 +33,8 @@ export type NoteRecord = {
     bodyVec: Float32Array;
     bodyDim: number;
     indexedAt: number;
+    /** Description embedding (007 D4). null = no / too-short description. */
+    descVec: Float32Array | null;
 };
 
 export type ChunkRecord = {
@@ -71,6 +75,10 @@ export class SQLiteStore {
     private idleTimer: number | null = null;
     private flushInFlight: Promise<void> | null = null;
     private disposed = false;
+    // 007 D5: desc/body blend weight for composed note vectors. Injected by
+    // main.ts from settings.descWeight (store must not depend on plugin
+    // settings directly). 0.5 = offline alpha-scan pick.
+    private composeAlpha = 0.5;
 
     private constructor(
         private readonly adapter: PersistAdapter,
@@ -80,6 +88,11 @@ export class SQLiteStore {
     /** True once dispose() has been called. Mutation methods become no-ops. */
     get isDisposed(): boolean {
         return this.disposed;
+    }
+
+    /** 007 D5: update the desc/body blend weight (settings.descWeight). */
+    setComposeAlpha(alpha: number): void {
+        this.composeAlpha = Math.max(0, Math.min(1, alpha));
     }
 
     /** Factory: open existing db file or create fresh, apply schema. */
@@ -102,8 +115,8 @@ export class SQLiteStore {
         if (this.disposed) return;
         this.db.run(
             `INSERT OR REPLACE INTO notes
-             (path, mtime, title, description, tier, body_vec, body_dim, indexed_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (path, mtime, title, description, tier, body_vec, body_dim, indexed_at, desc_vec)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 note.path,
                 note.mtime,
@@ -113,6 +126,7 @@ export class SQLiteStore {
                 vecToBlob(note.bodyVec),
                 note.bodyDim,
                 note.indexedAt,
+                note.descVec ? vecToBlob(note.descVec) : null,
             ],
         );
         this.touch();
@@ -120,7 +134,7 @@ export class SQLiteStore {
 
     getNote(path: string): NoteRecord | null {
         const res = this.db.exec(
-            `SELECT path, mtime, title, description, tier, body_vec, body_dim, indexed_at
+            `SELECT path, mtime, title, description, tier, body_vec, body_dim, indexed_at, desc_vec
              FROM notes WHERE path = ?`,
             [path],
         );
@@ -132,16 +146,77 @@ export class SQLiteStore {
             title: row[2] as string,
             description: row[3] as string | null,
             tier: row[4] as 'hot' | 'cold' | null,
-            bodyVec: blobToVec(row[5] as Uint8Array),
+            // Normalized at the read boundary (007 Task 2.5): body_vec is a
+            // mean-pool with norm < 1 for multi-chunk notes; rankers assume
+            // unit vectors (dot = cosine). See utils/l2normalize.ts.
+            bodyVec: l2normalize(blobToVec(row[5] as Uint8Array)),
             bodyDim: row[6] as number,
             indexedAt: row[7] as number,
+            descVec: row[8] ? blobToVec(row[8] as Uint8Array) : null,
         };
+    }
+
+    /**
+     * Composed ranking vector for one note (007 D4/A1):
+     * l2norm(alpha·descVec + (1−alpha)·l2norm(bodyVec)); no desc → l2norm(body).
+     * Query-side counterpart of getAllNotesLight().noteVec — use THIS (not
+     * getNote().bodyVec) wherever a similarity query vector is needed.
+     */
+    getNoteVec(path: string): Float32Array | null {
+        const res = this.db.exec(
+            'SELECT body_vec, desc_vec FROM notes WHERE path = ?',
+            [path],
+        );
+        if (res.length === 0 || res[0].values.length === 0) return null;
+        const row = res[0].values[0];
+        if (row[0] == null) return null;
+        return composeNoteVec(
+            blobToVec(row[0] as Uint8Array),
+            row[1] ? blobToVec(row[1] as Uint8Array) : null,
+            this.composeAlpha,
+        );
     }
 
     deleteNote(path: string): void {
         if (this.disposed) return;
         // chunks cascade automatically via ON DELETE CASCADE.
         this.db.run('DELETE FROM notes WHERE path = ?', [path]);
+        this.touch();
+    }
+
+    // ─── desc_vec backfill (007 D4 — self-healing upgrade path) ──────────────
+    // Schema v3 adds the column but existing rows stay NULL, and unchanged
+    // mtime means they never re-index. These helpers let the indexer embed
+    // JUST the descriptions (no chunk re-embed). No version meta needed: the
+    // pending query is its own termination condition.
+
+    countDescBackfillPending(minDescChars: number): number {
+        const res = this.db.exec(
+            `SELECT COUNT(*) FROM notes
+             WHERE description IS NOT NULL AND length(description) >= ?
+               AND desc_vec IS NULL AND body_vec IS NOT NULL`,
+            [minDescChars],
+        );
+        return res.length > 0 ? (res[0].values[0][0] as number) : 0;
+    }
+
+    listDescBackfillPending(minDescChars: number): Array<{ path: string; description: string }> {
+        const res = this.db.exec(
+            `SELECT path, description FROM notes
+             WHERE description IS NOT NULL AND length(description) >= ?
+               AND desc_vec IS NULL AND body_vec IS NOT NULL`,
+            [minDescChars],
+        );
+        if (res.length === 0) return [];
+        return res[0].values.map(row => ({
+            path: row[0] as string,
+            description: row[1] as string,
+        }));
+    }
+
+    setDescVec(path: string, vec: Float32Array): void {
+        if (this.disposed) return;
+        this.db.run('UPDATE notes SET desc_vec = ? WHERE path = ?', [vecToBlob(vec), path]);
         this.touch();
     }
 
@@ -224,12 +299,12 @@ export class SQLiteStore {
      * SELECT inside hot cosine loops (the diff between this and N×`getNote()`
      * is roughly 100x on a 10k-vault Discover render).
      */
-    getAllNotesLight(): Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; bodyVec: Float32Array }> {
+    getAllNotesLight(): Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; noteVec: Float32Array }> {
         const res = this.db.exec(
-            'SELECT path, title, tier, body_vec FROM notes WHERE body_vec IS NOT NULL',
+            'SELECT path, title, tier, body_vec, desc_vec FROM notes WHERE body_vec IS NOT NULL',
         );
         if (res.length === 0) return [];
-        const out: Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; bodyVec: Float32Array }> = [];
+        const out: Array<{ path: string; title: string; tier: 'hot' | 'cold' | null; noteVec: Float32Array }> = [];
         for (const row of res[0].values) {
             const tierRaw = row[2] as string | null;
             const tier: 'hot' | 'cold' | null = tierRaw === 'cold' ? 'cold' : tierRaw === 'hot' ? 'hot' : null;
@@ -237,7 +312,14 @@ export class SQLiteStore {
                 path: row[0] as string,
                 title: (row[1] as string) ?? '',
                 tier,
-                bodyVec: blobToVec(row[3] as Uint8Array),
+                // Composed + unit-norm ranking vector (007 D4/A1). Renamed
+                // from `bodyVec` so tsc walks every consumer through the
+                // semantics change (mean-pool body → desc-weighted blend).
+                noteVec: composeNoteVec(
+                    blobToVec(row[3] as Uint8Array),
+                    row[4] ? blobToVec(row[4] as Uint8Array) : null,
+                    this.composeAlpha,
+                ),
             });
         }
         return out;
@@ -269,6 +351,22 @@ export class SQLiteStore {
             id: `${row[0] as string}#${row[1] as number}`,
             tokens: tokenizeForBM25(row[2] as string),
         }));
+
+        // 007 D7: descriptions join the BM25 pool as one virtual doc per note
+        // (chunkIndex -1 convention). Rare terms that live only in a
+        // description become keyword-searchable. Sole consumer (searchHybrid)
+        // max-pools per notePath and ignores chunkIndex — verified safe.
+        const descRes = this.db.exec(
+            "SELECT path, description FROM notes WHERE description IS NOT NULL AND description != ''",
+        );
+        if (descRes.length > 0) {
+            for (const row of descRes[0].values) {
+                docs.push({
+                    id: `${row[0] as string}#-1`,
+                    tokens: tokenizeForBM25(row[1] as string),
+                });
+            }
+        }
 
         const idf = computeIdf(queryTokens, docs);
         const ranked = scoreBM25(queryTokens, docs, idf, limit);

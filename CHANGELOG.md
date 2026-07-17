@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.2.0 — 2026-07-17
+
+Search-quality release. Template-heavy notes (person cards, log templates) no longer crowd *Find similar* / Discover / relation-graph results with their template siblings — the genuinely related content now surfaces. Driven by a real-vault case where a person card's own conversation file ranked #10 behind nine sibling cards; after this release it ranks #1.
+
+### Fixed
+- **Long notes were systematically under-scored.** Note-level vectors are mean-pooled from chunk vectors without re-normalization, so multi-chunk notes had norm < 1 while rankers assumed unit vectors (dot = cosine). Vectors are now L2-normalized at the read boundary. This alone moved the dogfood case's target conversation from rank #10 to #1 — expect similarity results to change (for the better) across the vault.
+
+### Changed
+- **Embedding input is denoised.** Markdown structure symbols (table borders/divider rows, block/bar characters like `█▃▅`, middle-dot runs) are stripped from the text fed to the embedding model. Shared template symbols dominated note-to-note cosine for templated notes. Stored chunk text is untouched — keyword search and snippets are unaffected. Single middle dots (CJK name separators, e.g. 趙·雲) are preserved.
+- **Note ranking vector now blends the frontmatter `description`.** `noteVec = normalize(0.5·desc + 0.5·body)` when a description (≥10 chars) exists; body-only otherwise. A semantic description pins *who/what the note is about*, which plain body text can't when bodies share a template. Blend weight is tunable via `descWeight` in `data.json` (no UI control on purpose).
+- **Description generator sees content, not template.** Sampling now denoises first and takes head 1200 + tail 800 chars (personal content in templated notes tends to live at the end), and the prompt forbids describing the note's format/structure. Previously the LLM described the template ("contains statistics tables…") for exactly the notes that needed a semantic description most.
+
+### Added
+- **Descriptions are keyword-searchable.** Each note's `description` joins the BM25 pool as a virtual document — terms that appear only in the description now hit in search.
+- **Zero-effort upgrade.** First launch after upgrading runs a one-time incremental pass: only notes containing strippable symbols are re-embedded (16% of the dogfood vault, not a full rebuild), and existing descriptions get their embeddings backfilled (descriptions only — seconds per thousand notes). A progress notice shows while this runs; interrupting is safe (it resumes on next launch).
+
+### Notes
+- Hidden settings: `descWeight` (default 0.5, validated by a two-sided boundary scan — higher values start sacrificing true positives) and `minDescChars` (default 10).
+- Remaining topic-level neighbors (people who discuss the same subjects) are a semantic-resolution limit of the built-in model; a larger embedding model via the Ollama/OpenAI provider raises that ceiling at the cost of speed.
+
 ## 1.1.1 — 2026-07-07
 
 Audit compliance patch — addresses type-safety warnings raised by the Obsidian Developer Dashboard on the 1.1.0 audit. No behaviour changes.

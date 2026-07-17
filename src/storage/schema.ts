@@ -15,7 +15,7 @@
  */
 import type { Database } from 'sql.js';
 
-export const SCHEMA_VERSION = '2';
+export const SCHEMA_VERSION = '3';
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS notes (
@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS notes (
     tier        TEXT,
     body_vec    BLOB,
     body_dim    INTEGER NOT NULL,
-    indexed_at  INTEGER NOT NULL
+    indexed_at  INTEGER NOT NULL,
+    desc_vec    BLOB
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -60,7 +61,25 @@ CREATE INDEX IF NOT EXISTS idx_synonyms_term ON synonyms(term);
  *   - 1 → 2: introduce `bootstrapped` sticky meta flag. If the user already
  *     has a successful index (last_indexed_at present), backfill bootstrapped
  *     so auto-index on file events still fires after upgrade.
+ *   - 2 → 3: add `notes.desc_vec BLOB` (007 D4 — description embedding for
+ *     weighted note-vector composition). Existing rows keep NULL until the
+ *     next re-index of that note.
  */
+
+/**
+ * PRAGMA-guarded ALTER: adds `desc_vec` only when the column is missing.
+ * Idempotent, so every migration path (1→3, 2→3, unknown-version normalize)
+ * can call it without risking a duplicate-column throw.
+ */
+function ensureDescVecColumn(db: Database): void {
+    const info = db.exec("PRAGMA table_info(notes)");
+    const hasCol = info.length > 0
+        && info[0].values.some(row => row[1] === 'desc_vec');
+    if (!hasCol) {
+        db.exec('ALTER TABLE notes ADD COLUMN desc_vec BLOB');
+    }
+}
+
 export function applySchema(db: Database): void {
     db.exec(SCHEMA_SQL);
 
@@ -80,7 +99,10 @@ export function applySchema(db: Database): void {
 
     if (currentVersion === null) {
         // Fresh install OR pre-existing SQLite db that never got schema_version
-        // (dev rough patches before Phase 2 commit, or corruption).
+        // (dev rough patches before Phase 2 commit, or corruption). The latter
+        // may predate desc_vec — CREATE TABLE IF NOT EXISTS won't add columns
+        // to an existing table, so guard-ALTER here too.
+        ensureDescVecColumn(db);
         db.run("INSERT INTO meta(key, value) VALUES('schema_version', ?)", [SCHEMA_VERSION]);
         backfillBootstrapped();
         return;
@@ -88,6 +110,13 @@ export function applySchema(db: Database): void {
 
     if (currentVersion === '1') {
         backfillBootstrapped();
+        ensureDescVecColumn(db);
+        db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
+        return;
+    }
+
+    if (currentVersion === '2') {
+        ensureDescVecColumn(db);
         db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
         return;
     }
@@ -119,5 +148,6 @@ export function applySchema(db: Database): void {
         `vault-curate: unrecognised schema_version "${currentVersion}" — resetting to ${SCHEMA_VERSION}`,
     );
     backfillBootstrapped();
+    ensureDescVecColumn(db);
     db.run("UPDATE meta SET value = ? WHERE key = 'schema_version'", [SCHEMA_VERSION]);
 }

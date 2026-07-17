@@ -528,12 +528,15 @@ export class SearchView extends ItemView {
         let dimMismatchCount = 0;
         for (const r of results) {
             const stored = store.getNote(r.path);
-            if (!stored || stored.bodyVec.length === 0) {
+            // 007 D4/A1: clustering runs on the same composed noteVec every
+            // other surface ranks with (ui-state consistency).
+            const noteVec = store.getNoteVec(r.path);
+            if (!stored || !noteVec || noteVec.length === 0) {
                 missingPaths.push(r.path);
                 continue;
             }
-            if (canonicalDim === 0) canonicalDim = stored.bodyVec.length;
-            else if (stored.bodyVec.length !== canonicalDim) {
+            if (canonicalDim === 0) canonicalDim = noteVec.length;
+            else if (noteVec.length !== canonicalDim) {
                 dimMismatchCount++;
                 continue;
             }
@@ -550,7 +553,7 @@ export class SearchView extends ItemView {
                 title: r.title,
                 description,
                 score: r.score,
-                embedding: Array.from(stored.bodyVec),
+                embedding: Array.from(noteVec),
                 tier: r.tier,
                 tags: r.tags,
             });

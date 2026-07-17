@@ -129,6 +129,8 @@ The "recent" cutoff is tunable in **Settings → Advanced → Hot window (days)*
 
 Right-click any `.md` → **VC: Find similar notes** → results show up in the sidebar; you can drag them straight to Canvas.
 
+Since 1.2.0, similarity is template-resistant: markdown structure symbols are stripped from embedding input, and the frontmatter `description` (when present) blends into the note's ranking vector — so a person card finds *that person's* conversations, not its nine template siblings. Upgrading triggers a one-time incremental re-index of symbol-heavy notes plus a description-embedding backfill (a progress notice shows; no manual rebuild needed).
+
 ### Relation graph (Canvas)
 
 Generate an editable **Obsidian Canvas** around any note: the note in the center (green), its top-K semantic neighbors laid out radially, every edge labeled with its similarity score.

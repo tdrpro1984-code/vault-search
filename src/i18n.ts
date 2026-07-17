@@ -147,6 +147,8 @@ export interface Locale {
     // Notices
     noticeIndexEmpty: string;
     noticeIndexing: (done: number, total: number) => string;
+    noticeDescBackfill: (total: number) => string;
+    noticeDescBackfillDone: (written: number) => string;
     noticeIndexDone: (total: number, hot: number, cold: number, failed: number) => string;
     noticeUpToDate: string;
     noticeUpdated: (updated: number, total: number, hot: number) => string;
@@ -348,6 +350,8 @@ const en: Locale = {
         `${skipped} notes have a different embedding dimension than the current model. Run "Rebuild index" to recover.`,
     noticeIndexEmpty: "Vault Curate: Index is empty. Run 'Rebuild index' first",
     noticeIndexing: (done, total) => `Vault Curate: Indexing ${done}/${total}...`,
+    noticeDescBackfill: (total) => `Vault Curate: embedding ${total} descriptions (one-time upgrade, ~1-3 min)...`,
+    noticeDescBackfillDone: (written) => `Vault Curate: description embeddings ready (${written} notes)`,
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `, ${failed} failed` : "";
         return `Vault Curate: Done — ${total} notes (${hot} hot, ${cold} cold${f})`;
@@ -415,8 +419,9 @@ Respond with valid JSON only, in ${languageLabel}:
 Rules:
 1. Description in English, 50-100 words
 2. Description must describe specific content, never repeat the title
-3. Tags in English, 3-5 tags, no # prefix, no spaces
-4. Reply only in JSON
+3. Describe only the note's subject matter — never its format or structure (tables, statistics, charts, sections)
+4. Tags in English, 3-5 tags, no # prefix, no spaces
+5. Reply only in JSON
 
 {"description": "...", "tags": ["...", "...", "..."]}
 
@@ -573,6 +578,8 @@ const zhTW: Locale = {
         `${skipped} 篇筆記的 embedding 維度與當前模型不符。請執行「重建索引」修復。`,
     noticeIndexEmpty: "Vault Curate：索引為空，請先執行「重建索引」",
     noticeIndexing: (done, total) => `Vault Curate：索引中 ${done}/${total}...`,
+    noticeDescBackfill: (total) => `Vault Curate：補嵌 ${total} 篇 description（升級一次性作業，約 1-3 分鐘）...`,
+    noticeDescBackfillDone: (written) => `Vault Curate：description 向量就緒（${written} 篇）`,
     noticeIndexDone: (total, hot, cold, failed) => {
         const f = failed > 0 ? `，${failed} 篇失敗` : "";
         return `Vault Curate：完成 — ${total} 篇（${hot} hot、${cold} cold${f}）`;
@@ -640,8 +647,9 @@ ${notesBlock}
 規則：
 1. description 必須使用繁體中文，50-100 字，禁止用英文或簡體中文
 2. description 必須描述具體內容，禁止重複標題
-3. tags 必須使用繁體中文，3-5 個，不要 # 前綴，不能有空格
-4. 只回覆 JSON，不要解釋
+3. 只描述筆記的內容主題，禁止描述筆記的格式或結構（如表格、統計、圖表、欄位）
+4. tags 必須使用繁體中文，3-5 個，不要 # 前綴，不能有空格
+5. 只回覆 JSON，不要解釋
 
 {"description": "...", "tags": ["...", "...", "..."]}
 
