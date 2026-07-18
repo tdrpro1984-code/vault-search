@@ -19,10 +19,6 @@ Traditional Chinese · Simplified Chinese · CJK · local-first · hybrid retrie
 
 </div>
 
----
-
-> ⓘ **Previously published as `vault-search`** (plugin id and repository renamed). A different plugin authored by a separate developer now occupies the `vault-search` id — see the [Upgrading from vault-search](#upgrading-from-vault-search) section below before installing if you used earlier versions.
-
 ## Why Vault Curate?
 
 Obsidian's built-in search is literal: think "prayer" but your note says "devotional" and you'll miss it. Most semantic-search plugins use generic multilingual models, which tend to under-perform on Chinese content.
