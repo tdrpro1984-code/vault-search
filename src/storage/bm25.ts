@@ -111,7 +111,7 @@ export function buildBM25Index(docs: BM25Doc[]): BM25Index {
     // Pass 1: per-doc tf maps keyed by term hash, accumulated per term.
     const perTerm = new Map<number, number[]>(); // hash → [docIdx, tf, ...]
     const docLens = new Float64Array(docs.length);
-    const docIds: string[] = new Array(docs.length);
+    const docIds = new Array<string>(docs.length);
     let totalLen = 0;
     for (let i = 0; i < docs.length; i++) {
         const d = docs[i];

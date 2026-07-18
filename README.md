@@ -45,7 +45,7 @@ Obsidian's built-in search is literal: think "prayer" but your note says "devoti
 2. After enabling, the **Welcome to Vault Curate** modal opens. Under **Embedding provider**, pick **Built-in (on-device, WebGPU)** and click **Index my vault now**
 3. After the ~110 MB model download and WebGPU indexing finish, click the sidebar compass icon and start searching
 
-> ⚠️ Vault Curate is currently going through Obsidian's community review. If you can't find it in Community plugins yet, use the [Manual install](#manual-install) path below.
+> ⚠️ Vault Curate is currently going through Obsidian's community review. Until it lands there, the recommended path is [Install via BRAT](#install-via-brat) (auto-updates included) or the [Manual install](#manual-install) below.
 
 ---
 
@@ -62,9 +62,19 @@ Obsidian's built-in search is literal: think "prayer" but your note says "devoti
 3. Search **Vault Curate** → **Install** → **Enable**
 4. The **Welcome to Vault Curate** modal opens automatically on first launch
 
+### Install via BRAT
+
+While community review is pending, [BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewers Auto-update Tool) gives you one-click install **with auto-updates on every release**:
+
+1. Install and enable **BRAT** from Community plugins
+2. Cmd/Ctrl+P → `BRAT: Add a beta plugin for testing` → enter `notoriouslab/vault-curate`
+3. Enable **Vault Curate** in **Settings → Community plugins** — the Welcome modal takes it from there
+
+New releases are picked up by BRAT automatically (or on demand via `BRAT: Check for updates to all beta plugins`).
+
 ### Manual install
 
-1. Download `main.js`, `manifest.json`, `styles.css`, `worker.js`, `ort-wasm-simd-threaded.wasm` from [Releases](https://github.com/notoriouslab/vault-curate/releases)
+1. Download `main.js`, `manifest.json`, `styles.css` from [Releases](https://github.com/notoriouslab/vault-curate/releases) (the two `.wasm` runtimes are fetched automatically on first launch)
 2. Copy them into `.obsidian/plugins/vault-curate/` in your vault
 3. Enable in **Settings → Community plugins**
 
@@ -129,7 +139,9 @@ The "recent" cutoff is tunable in **Settings → Advanced → Hot window (days)*
 
 Right-click any `.md` → **VC: Find similar notes** → results show up in the sidebar; you can drag them straight to Canvas.
 
-Since 1.2.0, similarity is template-resistant: markdown structure symbols are stripped from embedding input, and the frontmatter `description` (when present) blends into the note's ranking vector — so a person card finds *that person's* conversations, not its nine template siblings. Upgrading triggers a one-time incremental re-index of symbol-heavy notes plus a description-embedding backfill (a progress notice shows; no manual rebuild needed).
+Since 1.2.0, similarity is template-resistant: markdown structure symbols are stripped from embedding input, and the frontmatter `description` (when present) blends into the note's ranking vector — so a person card finds *that person's* conversations, not its nine template siblings.
+
+Since 1.2.2, embedding input is additionally converted Traditional→Simplified Chinese (bundled character table; stored text, keyword search, snippets and generated descriptions all stay Traditional) — bge-small-zh is trained predominantly on Simplified, and the conversion measurably sharpens ranking on Traditional-Chinese vaults. Upgrades trigger a one-time re-index with a progress notice; no manual rebuild needed.
 
 ### Relation graph (Canvas)
 

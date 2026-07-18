@@ -29,6 +29,10 @@ export interface VaultSearchSettings {
     /** 007 D5: descriptions shorter than this are treated as absent
      *  (too short = embedding noise). Hidden setting. */
     minDescChars: number;
+    /** 008 D7: max results from the query note's own folder in Find
+     *  Similar / relation graph (template siblings live together and
+     *  crowd out the note's actual content). 0 disables. Hidden setting. */
+    sameFolderCap: number;
     hotDays: number;
     searchScope: "hot" | "all" | "cold";
     excludePatterns: string[];
@@ -59,6 +63,7 @@ export const DEFAULT_SETTINGS: VaultSearchSettings = {
     maxEmbedChars: 2000,
     descWeight: 0.5,
     minDescChars: 10,
+    sameFolderCap: 3,
     hotDays: 90,
     searchScope: "hot",
     excludePatterns: ["_templates/", "templates/", ".trash/", "3_wiki/"],

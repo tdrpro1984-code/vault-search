@@ -25,6 +25,7 @@ import { SQLiteStore } from "./storage/SQLiteStore";
 import type { EmbeddingProvider } from "./embedding";
 import { splitChunks } from "./indexer/chunker";
 import { denoiseForEmbed, hasDenoisableContent, DENOISE_VERSION } from "./indexer/denoise";
+import { t2sForEmbed, hasCJK, T2S_VERSION } from "./indexer/preproc";
 import { findH1Collisions, type FileTitleSource } from "./indexer/titleCollisions";
 import { meanPool } from "./utils/meanPool";
 import { stripFrontmatter } from "./utils";
@@ -201,6 +202,7 @@ export class Indexer {
         // one-time upgrade scan is moot — stamp it done. MUST stay outside
         // writeIndexMeta() (indexSingleFile calls that on every file edit).
         this.store.setMeta("denoise_version", DENOISE_VERSION);
+        this.store.setMeta("t2s_version", T2S_VERSION);
         await this.store.flush();
         // 007 D9: pay the inverted-index build here (index was invalidated by
         // the upserts above) so the user's next search is <1ms, not ~3s.
@@ -266,6 +268,10 @@ export class Indexer {
         // into a full rebuild. Measured re-embed surface: 16% of the dogfood
         // vault (design D3).
         const denoiseUpgrade = hasIndex && this.store.getMeta("denoise_version") !== DENOISE_VERSION;
+        // 008 D4: t2s rule-table version. Trigger surface is near-total
+        // (every CJK-bearing note), i.e. effectively a full re-embed — the
+        // standard indexing progress notice keeps it visible.
+        const t2sUpgrade = hasIndex && this.store.getMeta("t2s_version") !== T2S_VERSION;
 
         const files = this.getMarkdownFiles();
         const incomingSet = this.buildIncomingSet();
@@ -301,15 +307,21 @@ export class Indexer {
                 toReindex.push(file);
                 continue;
             }
-            if (denoiseUpgrade) {
+            if (denoiseUpgrade || t2sUpgrade) {
                 const content = await this.plugin.app.vault.cachedRead(file);
-                if (hasDenoisableContent(stripFrontmatter(content))) {
+                const body = stripFrontmatter(content);
+                const needDenoise = denoiseUpgrade && hasDenoisableContent(body);
+                // Description conversion rides indexOne (design 008 D4:
+                // single upgrade path, backfill untouched) — so a CJK desc
+                // on an all-English body must also re-index.
+                const needT2s = t2sUpgrade && (hasCJK(body) || hasCJK(stored.description ?? ""));
+                if (needDenoise || needT2s) {
                     toReindex.push(file);
                 }
             }
         }
-        if (denoiseUpgrade) {
-            console.debug(`vault-curate: denoise upgrade scan → ${toReindex.length} notes to re-embed (rule set v${DENOISE_VERSION})`);
+        if (denoiseUpgrade || t2sUpgrade) {
+            console.debug(`vault-curate: upgrade scan → ${toReindex.length} notes to re-embed (denoise v${DENOISE_VERSION}${denoiseUpgrade ? "*" : ""}, t2s v${T2S_VERSION}${t2sUpgrade ? "*" : ""})`);
         }
 
         if (toReindex.length === 0) {
@@ -327,6 +339,7 @@ export class Indexer {
             // MUST stay outside writeIndexMeta(): indexSingleFile also calls that,
             // and a single-file edit would falsely mark the one-time scan as done.
             if (denoiseUpgrade) this.store.setMeta("denoise_version", DENOISE_VERSION);
+            if (t2sUpgrade) this.store.setMeta("t2s_version", T2S_VERSION);
             await this.backfillDescVecs();
             await this.store.flush();
             new Notice(t.noticeUpToDate);
@@ -364,6 +377,7 @@ export class Indexer {
         // calls that, and a single-file edit would falsely mark the one-time
         // scan as done.
         this.store.setMeta("denoise_version", DENOISE_VERSION);
+        this.store.setMeta("t2s_version", T2S_VERSION);
         await this.backfillDescVecs();
         await this.store.flush();
         // 007 D9: same as rebuild() — rebuild the BM25 index while we're
@@ -427,7 +441,7 @@ export class Indexer {
                 if (this.store.isDisposed) return;
                 const mapped = pending
                     .slice(i, i + EMBED_BATCH_SIZE)
-                    .map(p => ({ path: p.path, input: denoiseForEmbed(p.description) }));
+                    .map(p => ({ path: p.path, input: denoiseForEmbed(t2sForEmbed(p.description)) }));
                 // Denoise-empty descriptions get the zero-length sentinel so
                 // they leave the pending set — skipping them silently meant
                 // infinite retry on every update() AND a spurious startup
@@ -494,9 +508,10 @@ export class Indexer {
                 if (this.store.isDisposed) return false;
                 const batch = chunks.slice(i, i + EMBED_BATCH_SIZE);
                 const tBatch = Date.now();
-                // Embedding input is denoised (007 D1); chunks.content below
-                // keeps the raw text so BM25 + snippets are unaffected.
-                const vecs = await this.provider.embed(batch.map(c => denoiseForEmbed(c.content)));
+                // Embedding input is t2s-converted (008 D3) then denoised
+                // (007 D1); chunks.content below keeps the raw Traditional
+                // text so BM25 + snippets are unaffected.
+                const vecs = await this.provider.embed(batch.map(c => denoiseForEmbed(t2sForEmbed(c.content))));
                 console.debug(`vault-curate: embedded batch of ${batch.length} (${Date.now() - tBatch}ms)`);
                 chunkVecs.push(...vecs);
             }
@@ -515,7 +530,7 @@ export class Indexer {
             // treat as absent (minDescChars, D5).
             let descVec: Float32Array | null = null;
             if (description && description.length >= this.plugin.settings.minDescChars) {
-                const descInput = denoiseForEmbed(description);
+                const descInput = denoiseForEmbed(t2sForEmbed(description));
                 if (descInput.trim().length > 0) {
                     descVec = (await this.provider.embed([descInput]))[0] ?? null;
                 } else {

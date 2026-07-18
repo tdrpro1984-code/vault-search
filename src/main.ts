@@ -2,6 +2,7 @@ import { Menu, normalizePath, Notice, Plugin, TFile, TFolder, requestUrl } from 
 import workerSource from "@inline/worker";
 import { SQLiteStore, type PersistAdapter } from "./storage/SQLiteStore";
 import { DENOISE_VERSION } from "./indexer/denoise";
+import { T2S_VERSION } from "./indexer/preproc";
 import {
     createProvider,
     type EmbeddingProvider,
@@ -309,9 +310,10 @@ export default class VaultSearchPlugin extends Plugin {
             // pre-existing tokenizer/model rebuild checks at the top of
             // update() get a startup trigger through the same call.
             const denoiseStale = this.store.getMeta("denoise_version") !== DENOISE_VERSION;
+            const t2sStale = this.store.getMeta("t2s_version") !== T2S_VERSION;
             const descPending = this.store.countDescBackfillPending(this.settings.minDescChars) > 0;
-            if (indexed && (denoiseStale || descPending)) {
-                console.debug(`vault-curate: upgrade work pending (denoiseStale=${denoiseStale}, descBackfill=${descPending}) — kicking incremental update`);
+            if (indexed && (denoiseStale || t2sStale || descPending)) {
+                console.debug(`vault-curate: upgrade work pending (denoiseStale=${denoiseStale}, t2sStale=${t2sStale}, descBackfill=${descPending}) — kicking incremental update`);
                 void this.updateIndex();
             }
         });
@@ -469,6 +471,7 @@ export default class VaultSearchPlugin extends Plugin {
         const topResults = findSimilarSqlite(file.path, store, {
             minScore: this.settings.minScore,
             topResults: this.settings.topResults,
+            sameFolderCap: this.settings.sameFolderCap,
         });
 
         if (topResults.length === 0) {
@@ -503,6 +506,7 @@ export default class VaultSearchPlugin extends Plugin {
         const neighbors = findSimilarSqlite(file.path, store, {
             minScore: this.settings.minScore,
             topResults: this.settings.topResults,
+            sameFolderCap: this.settings.sameFolderCap,
         });
         if (neighbors.length === 0) {
             new Notice(t.noticeGraphNoResults);
@@ -805,6 +809,10 @@ export default class VaultSearchPlugin extends Plugin {
         this.settings.minDescChars = Number.isFinite(mdc) && mdc >= 0
             ? Math.trunc(mdc)
             : DEFAULT_SETTINGS.minDescChars;
+        const sfc = Number(this.settings.sameFolderCap);
+        this.settings.sameFolderCap = Number.isFinite(sfc) && sfc >= 0
+            ? Math.trunc(sfc)
+            : DEFAULT_SETTINGS.sameFolderCap;
 
         // Phase 8 (004 rebrand): strip legacy v0.3.x fields that were carried
         // along by the loose Object.assign spread. Avoids stale `chunkingMode`,

@@ -34,26 +34,26 @@ export class VaultSearchSettingTab extends PluginSettingTab {
 
         const providerSetting = new Setting(parent)
             .setName(t.embeddingProvider);
-        // setDesc with \n is collapsed in Obsidian; build a fragment so each
-        // line shows on its own.
-        const descFrag = activeDocument.createDocumentFragment();
-        const lines = t.embeddingProviderDesc.split("\n");
-        for (let i = 0; i < lines.length; i++) {
-            if (i > 0) descFrag.appendChild(activeDocument.createElement("br"));
-            descFrag.appendChild(activeDocument.createTextNode(lines[i]));
-        }
         // If the backend failed to initialise at onload, the dropdown is
         // disabled — changing it would swap `this.provider` but
         // `rebuildIndex` would bail (no indexer), leaving the UI showing a
         // provider that isn't actually active. Surface that state instead
         // of letting the user fight a broken dropdown.
         const backendReady = !!this.plugin.indexer;
-        if (!backendReady) {
-            descFrag.appendChild(activeDocument.createElement("br"));
-            const warn = activeDocument.createElement("strong");
-            warn.textContent = t.backendNotReady;
-            descFrag.appendChild(warn);
-        }
+        // setDesc with \n is collapsed in Obsidian; build a fragment so each
+        // line shows on its own. Obsidian's createFragment/createEl helpers
+        // (1.2.1 audit: obsidianmd/prefer-create-el).
+        const descFrag = createFragment(frag => {
+            const lines = t.embeddingProviderDesc.split("\n");
+            for (let i = 0; i < lines.length; i++) {
+                if (i > 0) frag.createEl("br");
+                frag.appendText(lines[i]);
+            }
+            if (!backendReady) {
+                frag.createEl("br");
+                frag.createEl("strong", { text: t.backendNotReady });
+            }
+        });
         providerSetting.setDesc(descFrag);
         providerSetting
             .addDropdown(drop => {

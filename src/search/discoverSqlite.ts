@@ -23,6 +23,16 @@ function cosineNormalized(a: Float32Array, b: Float32Array): number {
 export interface DiscoverSettings {
     minScore: number;
     topResults: number;
+    /** 008 D7 (findSimilarSqlite only): cap results sharing the query
+     *  note's folder — template siblings live together and crowd out the
+     *  note's actual content. 0/undefined disables. */
+    sameFolderCap?: number;
+}
+
+/** Folder prefix of a vault path ('' for root notes). */
+function folderOf(path: string): string {
+    const i = path.lastIndexOf('/');
+    return i >= 0 ? path.slice(0, i) : '';
 }
 
 const YIELD_EVERY = 50;
@@ -175,6 +185,24 @@ export function findSimilarSqlite(
     }
 
     results.sort((a, b) => b.score - a.score);
+
+    // 008 D7: cap same-folder results. Scores are untouched — capped
+    // entries are simply skipped and the next-ranked notes move up.
+    const cap = settings.sameFolderCap ?? 0;
+    if (cap > 0) {
+        const qFolder = folderOf(currentPath);
+        const out: SearchResult[] = [];
+        let sameFolder = 0;
+        for (const r of results) {
+            if (folderOf(r.path) === qFolder) {
+                if (sameFolder >= cap) continue;
+                sameFolder++;
+            }
+            out.push(r);
+            if (out.length === settings.topResults) break;
+        }
+        return out;
+    }
     return results.slice(0, settings.topResults);
 }
 

@@ -19,6 +19,7 @@ import { blobToVec } from '../storage/vecCodec';
 import type { SearchResult } from '../types';
 import { fuzzyTitleSearch } from '../utils/jaroWinkler';
 import { rrfFuse, topNFused } from './rrfFuse';
+import { t2sForEmbed } from '../indexer/preproc';
 
 const DEFAULT_WEIGHTS = { bm25: 1.0, semantic: 1.0, fuzzy: 0.5 };
 
@@ -130,7 +131,9 @@ async function runSemantic(
     if (!(await provider.isReady())) {
         await provider.warmup();
     }
-    const queryVec = (await provider.embed([query]))[0];
+    // 008 D3: query embeds in the same t2s-converted space as the index
+    // (Traditional stays everywhere else — BM25 leg below uses raw query).
+    const queryVec = (await provider.embed([t2sForEmbed(query)]))[0];
     if (!queryVec || queryVec.length === 0) return new Map();
 
     const out = new Map<string, number>();

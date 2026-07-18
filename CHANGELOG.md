@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.2 — 2026-07-18
+
+Retrieval-quality release (plus the 1.2.0 audit compliance fixes, folded in unreleased).
+
+### Changed
+- **Find similar / relation graph now cap same-folder results** (hidden setting `sameFolderCap`, default 3, 0 disables). Template siblings live in the same folder and — once generic "hub" notes stopped crowding the list — tended to refill it; the cap hands those slots to the note's actual related content instead. Topic folders are unaffected in practice (the cap only bites when 4+ same-folder notes out-rank everything else).
+- **Embedding input is converted Traditional→Simplified Chinese before encoding.** bge-small-zh is trained predominantly on Simplified Chinese; converting only the embedding input (a bundled 4,105-entry character table — stored text, keyword search, snippets, and the description generator all stay Traditional) moves vectors into the model's best-trained token space. Measured on a 2,500-note Traditional-Chinese vault: true positives hold or improve while unrelated "hub" notes drop 3-4x in rank. Queries convert through the same table, so both sides always share one space. Simplified-Chinese vaults are unaffected (conversion is a no-op).
+- Upgrading triggers a one-time re-embed of CJK-bearing notes (effectively the whole index on a Chinese vault — the standard progress notice shows; interrupting is safe and resumes on next launch).
+- Settings tab now builds its multi-line provider description with Obsidian's `createFragment`/`createEl` helpers instead of bare `document.createElement` (obsidianmd/prefer-create-el, 4 sites).
+- Typed-array construction in the BM25 index build uses `new Array<string>(n)` — resolves one unsafe-`any` assignment warning.
+
+### Notes
+- A Taiwan-phrase mapping layer (e.g. 記憶體→内存) was evaluated and deliberately excluded: on a terminology-consistent vault both query and index convert identically, and benchmarks across person/tech/finance/church note groups showed no measurable gain over character-level conversion. May revisit as an opt-in if mixed-terminology vaults surface in the community.
+- The Dashboard's remaining recommendations stay as previously disclosed: vault enumeration (required for index build, scopable via `excludePatterns`), extra `*.wasm` release files (fetched once, cached), and the `PluginSettingTab.display` deprecation (adopting `getSettingDefinitions` would raise `minAppVersion` above 1.7.2 and drop users on 1.7–1.12).
+- The 1.2.0 audit also reported attestation verification errors for `main.js`/`styles.css`; `gh attestation verify` passes both against this repository (single attestation for `main.js` from the release workflow at the tagged commit), so provenance is intact on GitHub's side.
+
 ## 1.2.0 — 2026-07-17
 
 Search-quality release. Template-heavy notes (person cards, log templates) no longer crowd *Find similar* / Discover / relation-graph results with their template siblings — the genuinely related content now surfaces. Driven by a real-vault case where a person card's own conversation file ranked #10 behind nine sibling cards; after this release it ranks #1.
